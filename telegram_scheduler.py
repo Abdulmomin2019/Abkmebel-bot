@@ -380,12 +380,76 @@ def deliver(cfg, slot, state, dry_run=False, rnd=None):
     return False
 
 
+def channel_post_datetimes(limit=12):
+    """Kanalning oxirgi postlari vaqtini qaytaradi (mahalliy vaqt). Olinmasa — []."""
+    try:
+        import bot_manager as bm
+        posts = bm.channel_recent_posts(limit=limit, cache_seconds=30) or []
+    except Exception:
+        return []
+    out = []
+    year = dt.datetime.now(ZoneInfo("Asia/Tashkent")).year
+    for p in posts:
+        try:
+            d = dt.datetime.strptime(p.get("time", ""), "%d.%m %H:%M")
+            out.append(d.replace(year=year))
+        except Exception:
+            continue
+    return sorted(out)
+
+
+def count_content_posts_today(cfg, now=None, state=None):
+    """Bugun 09:00–18:00 orasida yuborilgan KONTENT postlari soni.
+    Ochilish (09:00) va yopilish (18:00) hisobga olinmaydi. Manba: kanal + state."""
+    tz = ZoneInfo(cfg.get("timezone", "Asia/Tashkent"))
+    now = now or dt.datetime.now(tz)
+    times = [t for t in channel_post_datetimes() if t.date() == now.date()]
+
+    # (1) kanalda ko'ringanlar (09:05 dan 18:00 gacha — ochilishdan keyin, yopilishdan oldin)
+    n_chan = len([t for t in times if (t.hour, t.minute) > (9, 5) and t.hour < 18])
+
+    # (2) holat faylidagi yozuvlar
+    n_state = 0
+    today = now.date().isoformat()
+    for k in ((state or {}).get("sent") or {}):
+        if not k.startswith(today):
+            continue
+        parts = k.split(" ")
+        if len(parts) < 2:
+            continue
+        try:
+            h, m = [int(x) for x in parts[1].split(":")]
+        except Exception:
+            continue
+        if (h, m) > (9, 5) and h < 18:
+            n_state += 1
+    return max(n_chan, n_state)
+
+
+def recent_channel_gap_minutes(now=None):
+    """Kanalga oxirgi post qachon yuborilgani (daqiqada). Ma'lum bo'lmasa — None."""
+    tz = ZoneInfo("Asia/Tashkent")
+    now = now or dt.datetime.now(tz)
+    times = channel_post_datetimes()
+    if not times:
+        return None
+    return (now - times[-1]).total_seconds() / 60.0
+
+
 def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
     """Vaqti kelgan (yoki o'tib ketgan) slotlarni yuboradi. GitHub Actions shuni chaqiradi."""
     tz = ZoneInfo(cfg.get("timezone", "Asia/Tashkent"))
     now = dt.datetime.now(tz)
     state = load_state()
     sent = skipped = 0
+
+    limit = int(cfg.get("daily_post_limit") or 0)
+    min_gap = float(cfg.get("min_post_gap_minutes") or 0)
+    content_done = count_content_posts_today(cfg, now, state) if limit else 0
+    last_gap = recent_channel_gap_minutes(now) if (min_gap or limit) else None
+    if limit:
+        log.info("Kunlik chegara: 09:00–18:00 orasida %d ta kontent posti (bugun: %d ta).",
+                 limit, content_done)
 
     log.info("Tekshiruv: %s (%s), slotlar: %d ta",
              now.strftime("%Y-%m-%d %H:%M"), WEEKDAYS[now.weekday()], len(cfg.get("slots", [])))
@@ -401,6 +465,35 @@ def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
         key = slot_key(slot, now, i)
         if state["sent"].get(key):
             log.info("• %s %s — allaqachon yuborilgan.", slot["time"], slot.get("label", ""))
+            continue
+
+        exempt = bool(slot.get("exempt"))          # ochilish/yopilish — chegaradan tashqari
+        slot_dt = slot_datetime(slot, now)
+
+        # (a) KANALDA shu slotga mos post allaqachon bor (deploy'dan keyin ham ishonchli)
+        if last_gap is not None:
+            same_slot_today = [t for t in channel_post_datetimes()
+                               if t.date() == now.date()
+                               and abs((t - slot_dt).total_seconds()) <= 8 * 60]
+            if same_slot_today:
+                log.info("• %s %s — kanalda allaqachon bor (takror yuborilmaydi).",
+                         slot["time"], slot.get("label", ""))
+                if not dry_run:
+                    state["sent"][key] = now.isoformat(timespec="seconds")
+                    save_state(state)
+                continue
+
+        # (b) kunlik chegara: 09:00–18:00 orasida faqat `limit` ta kontent posti
+        if limit and not exempt:
+            if content_done >= limit:
+                log.info("• %s %s — kunlik chegara (%d ta) tugagan, yuborilmadi.",
+                         slot["time"], slot.get("label", ""), limit)
+                continue
+
+        # (c) ikki post orasida minimal tanaffus (to'satdan ko'p post ketmasin)
+        if min_gap and not exempt and last_gap is not None and last_gap < min_gap:
+            log.info("• %s %s — yaqinda post yuborilgan (%.0f daqiqa oldin), kutamiz.",
+                     slot["time"], slot.get("label", ""), last_gap)
             continue
 
         delta = (now - slot_datetime(slot, now)).total_seconds()
@@ -419,6 +512,9 @@ def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
                 state["sent"][key] = now.isoformat(timespec="seconds")
                 save_state(state)
             sent += 1
+            if limit and not exempt:
+                content_done += 1
+                last_gap = 0.0
 
     log.info("Natija: %d ta yuborildi, %d ta hali kutilmoqda.", sent, skipped)
     return sent
