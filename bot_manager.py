@@ -2547,9 +2547,16 @@ class WebhookHandler(BaseHTTPRequestHandler):
             if not self.office_allowed():
                 return self._send(403, "🔒 faqat admin", "text/plain; charset=utf-8")
             now = time.time()
+            try:
+                _kp = channel_recent_posts(limit=3, cache_seconds=0)
+                _kanal = {"postlar": len(_kp), "oxirgi": (_kp[-1]["time"] if _kp else None),
+                          "xato": None if _kp else "kanal o'qilmadi (t.me/s javob bermadi)"}
+            except Exception as _e:
+                _kanal = {"postlar": 0, "oxirgi": None, "xato": str(_e)[:90]}
             return self._send(200, json.dumps({
                 "ok": True, "uptime_min": round((now - START_TIME) / 60, 1),
                 "admin_ids": sorted(admin_ids()), "visits": list(reversed(_APP_DIAG)),
+                "kanal": _kanal,
                 "xabarlar": list(reversed(_UPD_DIAG)), "yuborilmadi": list(reversed(_SEND_FAILS))},
                 ensure_ascii=False, indent=1), "application/json; charset=utf-8", no_store=True)
         if path.startswith("/app/panel"):
