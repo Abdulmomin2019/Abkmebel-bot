@@ -136,6 +136,35 @@ def send_photo(token, chat_id, photo, caption="", reply_markup=None, base_dir=".
     return _request(token, "sendPhoto", body, {"Content-Type": ct})
 
 
+def send_document(token, chat_id, doc, caption="", reply_markup=None, base_dir="."):
+    """Fayl (PDF, hujjat) yuboradi."""
+    full = doc if os.path.isabs(doc) else os.path.join(base_dir, doc)
+    if not os.path.exists(full):
+        return {"ok": False, "description": "fayl topilmadi: %s" % doc}
+    with open(full, "rb") as f:
+        content = f.read()
+    ext = os.path.splitext(full)[1].lower()
+    ctype = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+             ".jpeg": "image/jpeg", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             ".zip": "application/zip"}.get(ext, "application/octet-stream")
+    fields = {"chat_id": str(chat_id)}
+    if caption:
+        fields["caption"] = caption
+    if reply_markup:
+        fields["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
+    body, ct = _multipart(fields, "document", os.path.basename(full), content, ctype)
+    return _request(token, "sendDocument", body, {"Content-Type": ct}, timeout=180)
+
+
+def send_location(token, chat_id, latitude, longitude, reply_markup=None):
+    """Joylashuvni (lokatsiya) xarita belgisi sifatida yuboradi."""
+    payload = {"chat_id": chat_id, "latitude": float(latitude), "longitude": float(longitude)}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    return api_json(token, "sendLocation", payload)
+
+
 def send_chat_action(token, chat_id, action="typing"):
     return api_json(token, "sendChatAction", {"chat_id": chat_id, "action": action})
 
