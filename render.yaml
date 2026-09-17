@@ -1,0 +1,36 @@
+# Render.com uchun sozlamalar — menejer botni bepul bulutda ishga tushirish.
+#
+# Qanday ishlatiladi (README'da batafsil):
+#   1. render.com ga GitHub hisobi bilan kiring (telefondan ham bo'ladi)
+#   2. New → Blueprint → repozitoriyingizni tanlang → Apply
+#   3. So'ralgan ikki qiymatni kiriting: BOT_TOKEN va ADMIN_ID
+#   4. Render manzil (https://...onrender.com) beradi — bot webhook'ni o'zi o'rnatadi
+#
+# Eslatma: Render bepul tarifida xizmat 15 daqiqa harakatsizlikdan keyin "uxlaydi".
+# Shuning uchun cron-job.org orqali har 10 daqiqada manzilga "ping" yuborib turish
+# tavsiya etiladi (README'da ko'rsatilgan).
+
+services:
+  - type: web
+    name: abkmebel-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: "echo 'Kutubxonalar kerak emas - faqat standart Python'"
+    startCommand: "python3 bot_manager.py --webhook"
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHANNEL
+        value: "@abk_mebel"
+      - key: ADMIN_ID
+        value: "7707611721"
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: OFFICE_KEY
+        value: abk9153
+      - key: TZ
+        value: Asia/Tashkent
