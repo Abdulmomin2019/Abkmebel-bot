@@ -113,7 +113,7 @@ def _station(a, idx):
     """Bitta xodimning ish joyi (sahna) — xodim to'liq ko'rinadi, monitor yon tomonda."""
     look = LOOKS.get(a.get("key"), DEFAULT_LOOK)
     task = a.get("task", "") or ""
-    brief = task if len(task) <= 42 else task[:40].rstrip() + "…"
+    brief = task if len(task) <= 26 else task[:24].rstrip() + "…"
     metrics = "".join(
         '<div class="metric"><span class="mnum" data-k="' + a["key"] + "-" + m["key"] + '">'
         + str(m["value"]) + '</span><span class="mlabel">' + m["label"] + "</span></div>"
@@ -159,8 +159,44 @@ def _station(a, idx):
       </div>'''
 
 
-def render_html(data, live=False):
-    """Butun ilovani yasaydi."""
+EMBED_CSS = """
+/* Ilova ichida (iframe) ochilganda: sarlavha va ortiqcha bo'shliqlar yashiriladi */
+body.embed > .app > header { display: none !important }
+body.embed > .app { padding-top: 10px !important; max-width: 100% !important }
+body.embed .headline { margin-top: 4px !important }
+body.embed .brand p { display: none }
+"""
+
+
+def lock_html():
+    """Ofis bo'limi faqat admin uchun — boshqalarga shu sahifa ko'rsatiladi."""
+    return """<!DOCTYPE html>
+<html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🔒 Faqat admin uchun</title>
+<style>
+ body{margin:0;background:#080e1a;color:#e6eefc;font-family:system-ui,Segoe UI,Roboto,sans-serif;
+      display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+ .box{max-width:520px;background:linear-gradient(170deg,#141f36,#0d1526);border:1px solid #24314f;
+      border-radius:20px;padding:28px 26px;text-align:center}
+ .ic{font-size:52px;margin-bottom:10px}
+ h1{font-size:21px;margin:0 0 10px}
+ p{color:#9fb6d4;font-size:14.5px;line-height:1.65;margin:0 0 14px}
+ a{display:inline-block;margin-top:6px;background:#2563eb;color:#fff;text-decoration:none;
+   padding:11px 18px;border-radius:12px;font-weight:600}
+</style></head><body>
+ <div class="box">
+   <div class="ic">🔒</div>
+   <h1>Bu bo'lim faqat admin uchun</h1>
+   <p>AI-ofis (xodimlar, jurnal va buyruqlar) faqat bot egasiga ko'rinadi.
+      Mijozlar uchun <b>narxlar</b>, <b>buyurtma</b> va <b>manzil</b> bo'limlari ochiq.</p>
+   <a href="/app">📱 Ilovaga o'tish</a>
+ </div>
+</body></html>"""
+
+
+def render_html(data, live=False, embed=False):
+    """Butun ilovani yasaydi. embed=True — ilova ichida (iframe) ko'rsatish uchun."""
     stations = "".join(_station(a, i) for i, a in enumerate(data.get("agents", [])))
 
     schedule = "".join(
@@ -215,8 +251,11 @@ def render_html(data, live=False):
             or '<div class="entry empty">Bugun hali amal bo\'lmagan</div>'),
         ("__LIVE__", "true" if live else "false"),
         ("__SNAPSHOT__", json.dumps(data, ensure_ascii=False)),
+        ("__EMBED__", "true" if embed else "false"),
     ]:
         html = html.replace(token, value)
+    if embed:
+        html = html.replace("</style>", EMBED_CSS + "</style>", 1)
     return html
 
 
@@ -309,6 +348,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const LIVE = __LIVE__;
 const LOCKED = __LOCKED__;
+const EMBED = __EMBED__;
+const SES = (new URLSearchParams(location.search).get('t')) || '';
+if (EMBED) document.body.classList.add('embed');
 const DATA = __SNAPSHOT__;
 const INFO = __INFO__;
 const AGENTS = {};
@@ -445,7 +487,8 @@ setInterval(() => {
 /* ---------- 6) Jonli rejim ---------- */
 async function refresh() {
   try {
-    const r = await fetch('/ofis/data?_=' + Date.now());
+    const r = await fetch('/ofis/data?_=' + Date.now(),
+      SES ? {headers: {'X-Office-Session': SES}} : undefined);
     if (!r.ok) return;
     const data = await r.json();
     Object.keys(AGENTS).forEach(k => delete AGENTS[k]);
@@ -544,7 +587,7 @@ function openChat(key) {
   });
   chipsRender(chips, t => sendTo(key, t));
   const note = document.getElementById('mnote');
-  if (LOCKED && !officeKey()) {
+  if (LOCKED && !officeKey() && !SES) {
     note.innerHTML = '🔒 Buyruqlar (<i>post tashla, to\'xta</i>) uchun ilova kaliti kerak: ' +
       '<input id="keyin" placeholder="kalit" style="width:110px"> <button id="keysave">Saqlash</button>';
     document.getElementById('keysave').addEventListener('click', () => {
@@ -578,6 +621,7 @@ async function askAgent(key, text) {
       const headers = {'Content-Type': 'application/json'};
       const k = officeKey();
       if (k) headers['X-Office-Key'] = k;
+      if (SES) headers['X-Office-Session'] = SES;
       const r = await fetch('/ofis/ask', {
         method: 'POST', headers: headers,
         body: JSON.stringify({agent: key, text: text})
@@ -748,15 +792,15 @@ document.getElementById('msend').addEventListener('click', () => {
                    border-color:var(--accent) }
   .station.work { border-color:color-mix(in srgb, var(--accent) 55%, #2f6a4a) }
   .station.busy { border-color:#7a5a1e }
-  .scene { position:relative; height:268px; border-radius:15px; overflow:hidden; cursor:pointer;
+  .scene { position:relative; height:300px; border-radius:15px; overflow:hidden; cursor:pointer;
            background:#0e1a2c; transition:filter .4s }
-  .wall { position:absolute; inset:0 0 82px 0;
+  .wall { position:absolute; inset:0 0 92px 0;
           background:linear-gradient(180deg,#233553,#16243b 75%,#131f33) }
   .wall:after { content:''; position:absolute; inset:0; opacity:.25;
                 background-image:linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
                                  linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
                 background-size:34px 34px }
-  .floor { position:absolute; left:0; right:0; bottom:0; height:82px;
+  .floor { position:absolute; left:0; right:0; bottom:0; height:92px;
            background:linear-gradient(180deg,#3d2d1f,#241a12) }
   .floor:after { content:''; position:absolute; inset:0;
                  background:repeating-linear-gradient(90deg,transparent 0 28px,rgba(0,0,0,.22) 28px 30px) }
@@ -782,7 +826,7 @@ document.getElementById('msend').addEventListener('click', () => {
              border:3px solid #c9a145; box-shadow:0 5px 12px rgba(0,0,0,.4) }
   .wallart:after { content:''; position:absolute; inset:0;
              background:linear-gradient(180deg,transparent 62%, rgba(255,255,255,.18) 62%) }
-  .plant { position:absolute; right:12px; bottom:74px; width:26px; height:30px }
+  .plant { position:absolute; right:12px; bottom:76px; width:26px; height:30px }
   .plant b { position:absolute; left:4px; bottom:0; width:18px; height:14px; border-radius:2px 2px 6px 6px;
              background:linear-gradient(180deg,#a8734a,#6d4a2f) }
   .plant i { position:absolute; left:11px; bottom:12px; width:4px; height:12px; background:#2f6a4a }
@@ -790,7 +834,7 @@ document.getElementById('msend').addEventListener('click', () => {
              background:#3f8f63; border-radius:9px 9px 2px 9px }
   .plant i:before { left:-11px; top:0 } .plant i:after { left:3px; top:-5px; border-radius:9px 9px 9px 2px }
 
-  .corner { position:absolute; left:8px; bottom:53px; display:flex; gap:5px; z-index:8 }
+  .corner { position:absolute; left:8px; bottom:55px; display:flex; gap:5px; z-index:8 }
   .machine { width:30px; height:30px; border-radius:9px; background:rgba(20,33,55,.95);
              border:1px solid #25395c; display:flex; align-items:center; justify-content:center;
              transition:.35s; filter:grayscale(.35) brightness(.9) }
@@ -799,16 +843,16 @@ document.getElementById('msend').addEventListener('click', () => {
                     0 0 16px rgba(255,217,122,.4); transform:translateY(-3px) }
 
   /* stul */
-  .chair { position:absolute; left:30%; bottom:64px; width:106px; height:86px; margin-left:-53px;
-           background:linear-gradient(180deg,#2f4568,#1b2433); border-radius:18px 18px 10px 10px;
-           box-shadow:inset 0 0 0 1px #3b4f70, 0 10px 20px rgba(0,0,0,.35); z-index:3 }
+  .chair { position:absolute; left:27%; bottom:66px; width:86px; height:64px; margin-left:-43px;
+           background:linear-gradient(180deg,#1c2740,#101827); border-radius:14px 14px 8px 8px;
+           box-shadow:inset 0 0 0 1px #26344d, 0 8px 16px rgba(0,0,0,.4); z-index:3; opacity:.92 }
   .chair:before { content:''; position:absolute; left:50%; bottom:-14px; width:6px; height:16px;
                   margin-left:-3px; background:#1c2536 }
   .chair:after { content:''; position:absolute; left:50%; bottom:-18px; width:34px; height:6px;
                  margin-left:-17px; border-radius:4px; background:#1c2536 }
 
   /* odam — monitor uning oldini to'smaydi */
-  .human-wrap { position:absolute; left:30%; bottom:58px; width:122px; margin-left:-61px;
+  .human-wrap { position:absolute; left:27%; bottom:60px; width:142px; margin-left:-71px;
                 transition:transform 1.05s cubic-bezier(.4,.05,.3,1), bottom 1.05s;
                 z-index:5; filter:drop-shadow(0 6px 10px rgba(0,0,0,.35)) }
   .human { width:100%; height:auto; overflow:visible }
@@ -832,8 +876,8 @@ document.getElementById('msend').addEventListener('click', () => {
   @keyframes blink { 0%,96%,100% { transform:scaleY(1) } 98% { transform:scaleY(.1) } }
 
   /* tanaffusga yurish */
-  .station.on-break.coffee .human-wrap { transform:translate(-92px,-6px) scale(.94) }
-  .station.on-break.water  .human-wrap { transform:translate(-52px,-6px) scale(.94) }
+  .station.on-break.coffee .human-wrap { transform:translate(-96px,-4px) scale(.9) }
+  .station.on-break.water  .human-wrap { transform:translate(-58px,-4px) scale(.9) }
   .station.on-break.food   .human-wrap { transform:translate(-14px,-8px) scale(.94) }
   .station.standing .human-wrap { bottom:60px }
   .station.walking .human .legs { animation:steps .42s ease-in-out infinite alternate }
@@ -847,12 +891,12 @@ document.getElementById('msend').addEventListener('click', () => {
   @keyframes siphead { from { transform:rotate(0) } to { transform:rotate(-5deg) } }
 
   /* stol va kompyuter — monitor yon tomonda, xodim ko'rinib turadi */
-  .desk { position:absolute; left:3%; right:3%; bottom:42px; height:12px; z-index:6 }
+  .desk { position:absolute; left:3%; right:3%; bottom:44px; height:12px; z-index:6 }
   .desk-top { position:absolute; left:0; right:0; top:0; height:11px; border-radius:6px;
               background:linear-gradient(180deg,#d8ab77,#a87c4d); box-shadow:0 3px 8px rgba(0,0,0,.45) }
   .desk-body { position:absolute; left:5%; right:5%; top:10px; height:26px;
                background:linear-gradient(180deg,#8a6239,#66492a); border-radius:0 0 6px 6px; opacity:.92 }
-  .monitor { position:absolute; right:16px; bottom:12px; width:104px; background:#0d1728;
+  .monitor { position:absolute; right:10px; bottom:12px; width:88px; background:#0d1728;
              border:3px solid #26344f; border-radius:8px; padding:5px;
              box-shadow:0 8px 18px rgba(0,0,0,.45) }
   .screen { background:#0a1524; border-radius:5px; height:54px; padding:6px;
@@ -878,7 +922,9 @@ document.getElementById('msend').addEventListener('click', () => {
            border-radius:11px; padding:5px 9px; max-width:58%; z-index:8 }
   .badge b { display:block; font-size:12.5px } .badge span { font-size:10.5px; color:#8fa6c4 }
 
-  .bubble { position:absolute; left:62%; top:64px; transform:translateX(-50%); z-index:9;
+  .bubble { position:absolute; right:10px; top:64px; left:auto; transform:none; z-index:9; max-width:50%;
+            max-height:58px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2;
+            -webkit-box-orient:vertical; font-size:11.5px; line-height:1.45;
             background:linear-gradient(150deg,#1e3a60,#152945); color:#e2f0ff; font-size:11px;
             line-height:1.45; padding:6px 10px; border-radius:11px; border:1px solid #2f4d78;
             width:47%; text-align:center; box-shadow:0 8px 18px rgba(0,0,0,.42);
@@ -991,7 +1037,7 @@ document.getElementById('msend').addEventListener('click', () => {
                   font-size:12px; cursor:pointer; color:#08101d; font-weight:600 }
 
   @media (max-width:440px) {
-    .scene { height:248px } .human-wrap { width:104px; margin-left:-52px; left:32% }
+    .scene { height:262px } .human-wrap { width:112px; margin-left:-56px; left:30% }
     .bubble { max-width:50% } .askbtn { font-size:11px; padding:5px 8px }
   }
 </style>
