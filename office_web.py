@@ -113,7 +113,8 @@ def _station(a, idx):
     """Bitta xodimning ish joyi (sahna) — xodim to'liq ko'rinadi, monitor yon tomonda."""
     look = LOOKS.get(a.get("key"), DEFAULT_LOOK)
     task = a.get("task", "") or ""
-    brief = task if len(task) <= 26 else task[:24].rstrip() + "…"
+    # suhbat pufakchasi uchun qisqartirish: so'z chegarasida, 3 qatorga sig'adigan hajmda
+    brief = task if len(task) <= 44 else task[:41].rsplit(" ", 1)[0].rstrip(" .,;:«»(") + "…"
     metrics = "".join(
         '<div class="metric"><span class="mnum" data-k="' + a["key"] + "-" + m["key"] + '">'
         + str(m["value"]) + '</span><span class="mlabel">' + m["label"] + "</span></div>"
@@ -923,12 +924,12 @@ document.getElementById('msend').addEventListener('click', () => {
   .badge b { display:block; font-size:12.5px } .badge span { font-size:10.5px; color:#8fa6c4 }
 
   .bubble { position:absolute; right:10px; top:64px; left:auto; transform:none; z-index:9; max-width:50%;
-            max-height:58px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2;
+            max-height:78px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3;
             -webkit-box-orient:vertical; font-size:11.5px; line-height:1.45;
             background:linear-gradient(150deg,#1e3a60,#152945); color:#e2f0ff; font-size:11px;
             line-height:1.45; padding:6px 10px; border-radius:11px; border:1px solid #2f4d78;
             width:47%; text-align:center; box-shadow:0 8px 18px rgba(0,0,0,.42);
-            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+            display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden }
   .bubble:after { content:''; position:absolute; bottom:-5px; left:50%; margin-left:-4px; width:8px;
                   height:8px; background:inherit; transform:rotate(45deg);
                   border-right:1px solid #2f4d78; border-bottom:1px solid #2f4d78 }
