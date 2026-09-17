@@ -1,0 +1,16 @@
+# Render'dagi botni uyg'oq tutish (bepul tarif 15 daqiqada "uxlaydi").
+# Bu ish har 10 daqiqada /ping manziliga so'rov yuboradi — bot doim tayyor turadi.
+name: Botni uyg'oq tutish
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping
+        run: |
+          curl -s -m 60 -o /dev/null -w "javob: %{http_code}\n" https://abkmebel-bot.onrender.com/ping || true
