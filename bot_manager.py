@@ -651,8 +651,14 @@ def reply(chat_id, text, reply_markup=None, premium=True, reply_to=None):
         emap = {k: v for k, v in (bot_cfg().get("premium_emojis") or {}).items()
                 if not k.startswith("_")}
         entities = build_custom_emoji_entities(text, emap) or None
-    return send_message_rich(TOKEN, chat_id, text, entities=entities, reply_markup=reply_markup,
-                             reply_to=reply_to)
+    r = send_message_rich(TOKEN, chat_id, text, entities=entities, reply_markup=reply_markup,
+                          reply_to=reply_to)
+    try:
+        if not (isinstance(r, dict) and r.get("ok")):
+            note_send_fail(chat_id, (r or {}).get("description") or (r or {}).get("xato") or "noma'lum", text)
+    except Exception:
+        pass
+    return r
 
 
 def reply_photo(chat_id, photo, caption="", reply_markup=None):
@@ -2186,6 +2192,7 @@ def process_updates(updates):
     max_offset = state().get("offset", 0)
     for upd in updates:
         try:
+            upd_diag(upd)
             handle_update(upd)
             max_offset = max(max_offset, upd.get("update_id", 0) + 1)
             count += 1
@@ -2402,7 +2409,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             now = time.time()
             return self._send(200, json.dumps({
                 "ok": True, "uptime_min": round((now - START_TIME) / 60, 1),
-                "admin_ids": sorted(admin_ids()), "visits": list(reversed(_APP_DIAG))},
+                "admin_ids": sorted(admin_ids()), "visits": list(reversed(_APP_DIAG)),
+                "xabarlar": list(reversed(_UPD_DIAG)), "yuborilmadi": list(reversed(_SEND_FAILS))},
                 ensure_ascii=False, indent=1), "application/json; charset=utf-8", no_store=True)
         if path.startswith("/app/panel"):
             import app_web
@@ -2518,6 +2526,44 @@ def _sig(key: bytes, msg: str) -> str:
 
 
 _GROUP_GREET = {}         # guruhda kimga qachon salomlashish javobi berildi
+_UPD_DIAG = []            # oxirgi kiruvchi xabarlar (tashxis)
+_SEND_FAILS = []          # yuborilmagan javoblar (tashxis)
+_FAIL_NOTIFY = {}         # chat -> oxirgi xabar vaqti
+
+
+def upd_diag(upd):
+    """Kiruvchi xabarni tashxis jurnaliga yozadi."""
+    try:
+        m = upd.get("message") or upd.get("edited_message") or upd.get("callback_query") or {}
+        chat = (m.get("chat") or ((m.get("message") or {}).get("chat")) or {})
+        user = m.get("from") or {}
+        text = m.get("text") or m.get("data") or m.get("caption") or ""
+        _UPD_DIAG.append({
+            "t": time.strftime("%H:%M:%S"), "tur": chat.get("type") or "?",
+            "chat": str(chat.get("id") or "?"), "kim": str(user.get("id") or "?"),
+            "ism": (user.get("first_name") or "")[:20], "matn": str(text)[:60]})
+        del _UPD_DIAG[:-25]
+    except Exception:
+        pass
+
+
+def note_send_fail(chat_id, sabab, text=""):
+    """Javob yuborilmadi (bloklangan, chat topilmadi va h.k.) — jurnalga yozamiz."""
+    now = time.time()
+    _SEND_FAILS.append({"t": time.strftime("%H:%M:%S"), "chat": str(chat_id),
+                        "sabab": str(sabab)[:130], "matn": (text or "")[:50]})
+    del _SEND_FAILS[:-15]
+    aid = admin_id()
+    if aid and str(chat_id) != str(aid) and now - _FAIL_NOTIFY.get(str(chat_id), 0) > 3600:
+        _FAIL_NOTIFY[str(chat_id)] = now
+        try:
+            send_message_rich(TOKEN, aid,
+                              "⚠️ <b>Mijozga javob yuborilmadi</b>\n\n"
+                              f"Chat: <code>{chat_id}</code>\n"
+                              f"Sabab: {str(sabab)[:120]}\n"
+                              f"Xabar: {str(text)[:120]}")
+        except Exception:
+            pass
 _APP_VISITS = {}          # uid -> oxirgi xabar vaqti
 _APP_LAST_FAIL = [0.0]    # imzo o'tmagan holatlar
 _APP_DIAG = []            # oxirgi 20 ta ilova ochilishi (tashxis uchun)
