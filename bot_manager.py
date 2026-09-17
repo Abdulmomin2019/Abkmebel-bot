@@ -2311,11 +2311,16 @@ def posts_loop():
 # Webhook + AI-ofis ilovasi
 # --------------------------------------------------------------------------
 class WebhookHandler(BaseHTTPRequestHandler):
-    def _send(self, code, body, ctype="text/plain; charset=utf-8"):
+    def _send(self, code, body, ctype="text/plain; charset=utf-8", no_store=False):
         data = body.encode("utf-8") if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        if no_store:
+            # Telegram/brauzer eski sahifani ko'rsatmasligi uchun
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(data)
 
@@ -2350,7 +2355,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                                                   ensure_ascii=False),
                                   "application/json; charset=utf-8")
             return self._send(200, json.dumps(build_office_data(), ensure_ascii=False),
-                              "application/json; charset=utf-8")
+                              "application/json; charset=utf-8", no_store=True)
         if path in ("/app", "/app/") or path.startswith("/app?"):
             import app_web
             allowed = self.office_allowed()
@@ -2360,7 +2365,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 tok = make_office_session(aid) if aid else ""
             return self._send(200, app_web.render_app(build_office_data(), live=True,
                                                       admin=allowed, session=tok),
-                              "text/html; charset=utf-8")
+                              "text/html; charset=utf-8", no_store=True)
         if path.startswith("/app/panel"):
             import app_web
             if not self.office_allowed():
@@ -2370,10 +2375,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if path.startswith("/ofis"):
             import office_web
             if not self.office_allowed():
-                return self._send(403, office_web.lock_html(), "text/html; charset=utf-8")
+                return self._send(403, office_web.lock_html(), "text/html; charset=utf-8",
+                                  no_store=True)
             return self._send(200, office_web.render_html(build_office_data(), live=True,
                                                           embed=bool(q.get("embed"))),
-                              "text/html; charset=utf-8")
+                              "text/html; charset=utf-8", no_store=True)
         return self._send(200, "🏢 ABK MEBEL AI-ofis ishlayapti. Ilova: /app")
 
     def do_POST(self):
