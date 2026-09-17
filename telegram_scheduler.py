@@ -27,6 +27,7 @@ import json
 import os
 import sys
 import time
+import threading
 import logging
 import re
 import datetime as dt
@@ -36,6 +37,10 @@ import urllib.request  # faqat AI rejimi uchun
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
+# Bot qachon ishga tushgani (qayta ishga tushishdan himoya uchun)
+BOOT_TS = dt.datetime.now(ZoneInfo("Asia/Tashkent"))
+# run_due ikki joydan chaqiriladi — bir vaqtda ikki marta ishlamasin
+RUN_LOCK = threading.Lock()
 LOG_PATH = os.path.join(BASE_DIR, "sender.log")
 
 API_BASE = os.environ.get("TG_API_BASE", "https://api.telegram.org")
@@ -437,6 +442,17 @@ def recent_channel_gap_minutes(now=None):
 
 
 def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
+    """Bir vaqtda faqat bitta tekshiruv ishlaydi (ikki joydan chaqirilsa ham)."""
+    if not RUN_LOCK.acquire(blocking=False):
+        log.info("Oldingi tekshiruv hali tugamagan — bu safar o'tkazib yuborildi.")
+        return 0
+    try:
+        return _run_due_locked(cfg, grace_minutes=grace_minutes, dry_run=dry_run)
+    finally:
+        RUN_LOCK.release()
+
+
+def _run_due_locked(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
     """Vaqti kelgan (yoki o'tib ketgan) slotlarni yuboradi. GitHub Actions shuni chaqiradi."""
     tz = ZoneInfo(cfg.get("timezone", "Asia/Tashkent"))
     now = dt.datetime.now(tz)
@@ -450,6 +466,24 @@ def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
     if limit:
         log.info("Kunlik chegara: 09:00–18:00 orasida %d ta kontent posti (bugun: %d ta).",
                  limit, content_done)
+
+    # MUHIM: bot ishga tushganda vaqti allaqachon o'tgan slotlar qayta yuborilmaydi.
+    # (Render'da state.json yo'qolib qolsa ham takroriy post ketmaydi.)
+    if not dry_run:
+        belgilandi = 0
+        for i, slot in enumerate(cfg.get("slots") or []):
+            if not slot.get("time") or not slot_allowed_on(slot, now.date()):
+                continue
+            key = slot_key(slot, now, i)
+            if state["sent"].get(key):
+                continue
+            if slot_datetime(slot, now) < BOOT_TS:
+                state["sent"][key] = BOOT_TS.isoformat(timespec="seconds")
+                belgilandi += 1
+                log.info("• %s %s — bot shu vaqtdan keyin ishga tushdi, qayta yuborilmaydi.",
+                         slot["time"], slot.get("label", ""))
+        if belgilandi:
+            save_state(state)
 
     log.info("Tekshiruv: %s (%s), slotlar: %d ta",
              now.strftime("%Y-%m-%d %H:%M"), WEEKDAYS[now.weekday()], len(cfg.get("slots", [])))
