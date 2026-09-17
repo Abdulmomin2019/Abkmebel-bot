@@ -275,13 +275,17 @@
    }
   ],
   "address": {
-   "_izoh": "Mijozlarga ko'rsatiladigan manzil. Xarita tugmalari shu ma'lumotdan yasaladi.",
+   "_izoh": "Mijozlarga ko'rsatiladigan manzil. «📍 Manzil» bo'limi FAQAT shu ma'lumotni yuboradi — hech qanday anketa/buyurtma ishga tushmaydi.",
    "name": "ABK MEBEL — «ABK FURNITURE STUDIO»",
-   "text": "Toshkent sh., 9754+W32 (Google Maps Plus Code)",
+   "text": "Toshkent sh., Usta Shirin ko'chasi, 220b",
    "plus_code": "9754+W32",
-   "maps_url": "https://maps.google.com/?q=9754%2BW32%20Tashkent",
-   "route_url": "https://www.google.com/maps/dir/?api=1&destination=9754%2BW32%20Tashkent",
-   "landmark": "Google Maps'da «ABK MEBEL» deb qidirsa ham topiladi",
+   "maps_url": "https://maps.app.goo.gl/9PDaaevABLejgt6y6?g_st=atm",
+   "yandex_url": "https://yandex.com/maps/?ll=69.255141%2C41.359763&z=17&pt=69.255141,41.359763,pm2rdm",
+   "route_url": "https://www.google.com/maps/dir/?api=1&destination=41.359763,69.255141",
+   "landmark": "«Usta Shirin 220b» deb qidirsangiz ham topiladi (Google va Yandex xaritada)",
+   "lat": 41.359763,
+   "lng": 69.255141,
+   "map_photo": "images/manzil-xarita.jpg",
    "phone": "",
    "transport": "",
    "hours_text": "09:00 – 18:00 (har kuni)"
@@ -421,7 +425,12 @@
   "commands_extra": {
    "guruh": "Kanal guruhi holati va qo'llanma"
   },
-  "office_key": "abk9153"
+  "office_key": "abk9153",
+  "dalolatnoma": {
+   "_izoh": "Dalolatnoma bo'limi: yozma ma'lumot + rasm + PDF. Mijoz nimaga tayyor bo'lishini biladi.",
+   "photo": "images/dalolatnoma-1.png",
+   "pdf": "images/dalolatnoma.pdf"
+  }
  },
  "variator": {
   "_izoh": "Post matnlarida {salom}, {cta}, {tip}, {rasm} kabi tokenlar bo'lsa — har safar boshqasi tanlanadi. Spintax ham ishlaydi: {Xayrli tong|Assalomu alaykum}",
