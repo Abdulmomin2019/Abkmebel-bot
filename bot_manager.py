@@ -2380,6 +2380,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             if allowed and not tok:
                 aid = admin_id()
                 tok = make_office_session(aid) if aid else ""
+                diag_add({"verified": True, "uid": aid, "name": "kalit bilan",
+                          "reason": "ADMIN KALIT ✅", "init_len": 0, "init_head": "", "unsafe": None})
             return self._send(200, app_web.render_app(build_office_data(), live=True,
                                                       admin=allowed, session=tok),
                               "text/html; charset=utf-8", no_store=True)
