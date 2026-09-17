@@ -710,10 +710,37 @@ def register_user(user, is_bot=False):
     save_users(u)
 
 
+def extra_admins_path():
+    return os.path.join(DATA_DIR, "extra_admins.json")
+
+
+def extra_admins():
+    try:
+        with open(extra_admins_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        return {str(x) for x in (data if isinstance(data, list) else [])}
+    except Exception:
+        return set()
+
+
+def add_extra_admin(uid):
+    """Adminni ro'yxatga qo'shadi (faylga yoziladi)."""
+    ids = extra_admins()
+    ids.add(str(uid))
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(extra_admins_path(), "w", encoding="utf-8") as f:
+            json.dump(sorted(ids), f, ensure_ascii=False)
+    except Exception as e:
+        log.warning("admin saqlanmadi: %s", e)
+    return sorted(ids)
+
+
 def admin_ids():
-    """Adminlar ro'yxati (ADMIN_ID="111,222" ko'rinishida ham bo'ladi)."""
+    """Adminlar ro'yxati (ADMIN_ID="111,222" + qo'shilganlar)."""
     raw = str(bot_cfg().get("admin_id") or "")
-    return {x.strip() for x in raw.replace(";", ",").split(",") if x.strip()}
+    ids = {x.strip() for x in raw.replace(";", ",").split(",") if x.strip()}
+    return ids | extra_admins()
 
 
 def admin_id():
@@ -1948,7 +1975,17 @@ def handle_callback(cb):
     name = user.get("first_name", "")
     answer_callback_query(TOKEN, cb["id"])
 
-    if data == "myid":
+    if data == "men_men":
+        if not is_admin_user_id(user.get("id")):
+            reply(chat_id, "🔒 Bu amal faqat admin uchun.")
+            return
+        add_extra_admin(6869390773)
+        reply(chat_id, "✅ <b>Qo'shildi!</b>\n\n"
+                       "Endi <b>@Bazischiuz</b> (<code>6869390773</code>) ham admin.\n"
+                       "O'sha akkauntda «🏢 AI-Ofis» va «Panel» bo'limlari ko'rinadi "
+                       "(ilovani qayta ochish kifoya).")
+        log_action("ofis", "yangi admin qo'shildi", "@Bazischiuz (6869390773)", emoji="🔑")
+    elif data == "myid":
         reply(chat_id, f"🆔 <b>Sizning Telegram ID:</b> <code>{user.get('id')}</code>\n\n"
                        f"Ism: {user.get('first_name', '')}\n"
                        f"Admin bo'lsangiz, shu raqam ADMIN_ID ga yoziladi.")
