@@ -229,12 +229,12 @@ TEMPLATE = r"""<!DOCTYPE html>
   </header>
 
   <main id="views">
-    <section class="view__ACTIVE_OFFICE__" id="v-ofis"__HIDDEN_OFFICE__>__OFFICE__</section>
+    <section class="view__ACTIVE_OFFICE__" id="v-ofis" data-admin="1"__HIDDEN_OFFICE__>__OFFICE__</section>
     <section class="view" id="v-price">__PRICE__</section>
     <section class="view" id="v-order">__ORDER__</section>
     <section class="view" id="v-address">__ADDRESS__</section>
     <section class="view" id="v-bot">__BOT__</section>
-    <section class="view" id="v-panel"__HIDDEN_PANEL__>__PANEL__</section>
+    <section class="view" id="v-panel" data-admin="1"__HIDDEN_PANEL__>__PANEL__</section>
   </main>
 
   <nav class="tabs">
@@ -293,10 +293,19 @@ function unlockOffice(token) {
   if (!token) return;
   const ofis = document.getElementById('v-ofis');
   if (ofis && !ofis.querySelector('iframe')) {
-    ofis.innerHTML = '<iframe class="oframe" src="/ofis?embed=1&t=' +
-      encodeURIComponent(token) + '" referrerpolicy="same-origin"></iframe>';
+    const src = '/ofis?embed=1&t=' + encodeURIComponent(token);
+    ofis.innerHTML = '<iframe class="oframe" id="oframe" src="' + src +
+      '" referrerpolicy="same-origin"></iframe>';
+    watchFrame(src);
   }
-  document.querySelectorAll('[data-admin]').forEach(el => el.removeAttribute('hidden'));
+  document.querySelectorAll('[data-admin]').forEach(el => {
+    el.removeAttribute('hidden');
+    el.style.display = '';
+  });
+  ['v-ofis', 'v-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.removeAttribute('hidden');
+  });
   const v = document.getElementById('v-ofis');
   if (v) v.classList.add('active');
   const nav = document.querySelector('.tab[data-v="ofis"]');
@@ -307,6 +316,26 @@ function unlockOffice(token) {
     .then(r => r.ok ? r.text() : '')
     .then(html => { if (html) document.getElementById('v-panel').innerHTML = html; })
     .catch(() => {});
+}
+
+/* Iframe yuklanmasa (ba'zi Telegram WebView'lar bloklaydi) — zaxira yo'l:
+   sahifani o'zimiz yuklab, iframe ichiga to'g'ridan-to'g'ri joylaymiz. */
+function watchFrame(src) {
+  setTimeout(async () => {
+    const fr = document.getElementById('oframe');
+    if (!fr) return;
+    let ok = false;
+    try { ok = !!(fr.contentDocument && fr.contentDocument.querySelector('.station')); } catch (e) { ok = false; }
+    if (ok) return;                              // iframe o'zi ishladi
+    try {
+      const r = await fetch(src);
+      const html = await r.text();
+      if (html && html.indexOf('class="station"') !== -1) {
+        fr.removeAttribute('src');
+        fr.srcdoc = html;                        // skriptlar ham ishlaydi
+      }
+    } catch (e) {}
+  }, 3500);
 }
 
 async function whoami() {
