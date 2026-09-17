@@ -30,6 +30,8 @@ ISHGA TUSHIRISH
 
 import datetime as dt
 import difflib
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -2317,23 +2319,73 @@ class WebhookHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _query(self):
+        q = {}
+        try:
+            from urllib.parse import parse_qs
+            if "?" in self.path:
+                q = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1]).items()}
+        except Exception:
+            pass
+        return q
+
+    def office_allowed(self):
+        """Ofis bo'limi FAQAT adminga (yoki to'g'ri ilova kaliti bilan) ochiladi."""
+        q = self._query()
+        tok = q.get("t") or self.headers.get("X-Office-Session") or ""
+        uid = check_office_session(tok)
+        if uid is not None and is_admin_user_id(uid):
+            return True
+        key = os.environ.get("OFFICE_KEY") or (bot_cfg().get("office_key") or "")
+        supplied = self.headers.get("X-Office-Key") or q.get("k") or ""
+        return bool(key) and supplied == key
+
     def do_GET(self):
         path = self.path.split("?")[0]
+        q = self._query()
         if path.startswith("/ofis/data"):
+            if not self.office_allowed():
+                return self._send(403, json.dumps({"ok": False, "office_locked": True,
+                                                   "reason": "faqat admin"},
+                                                  ensure_ascii=False),
+                                  "application/json; charset=utf-8")
             return self._send(200, json.dumps(build_office_data(), ensure_ascii=False),
                               "application/json; charset=utf-8")
         if path in ("/app", "/app/") or path.startswith("/app?"):
             import app_web
-            return self._send(200, app_web.render_app(build_office_data(), live=True),
+            allowed = self.office_allowed()
+            tok = q.get("t") or ""
+            if allowed and not tok:
+                aid = admin_id()
+                tok = make_office_session(aid) if aid else ""
+            return self._send(200, app_web.render_app(build_office_data(), live=True,
+                                                      admin=allowed, session=tok),
+                              "text/html; charset=utf-8")
+        if path.startswith("/app/panel"):
+            import app_web
+            if not self.office_allowed():
+                return self._send(403, "🔒 faqat admin", "text/plain; charset=utf-8")
+            return self._send(200, app_web._panel_section(build_office_data()),
                               "text/html; charset=utf-8")
         if path.startswith("/ofis"):
             import office_web
-            return self._send(200, office_web.render_html(build_office_data(), live=True),
+            if not self.office_allowed():
+                return self._send(403, office_web.lock_html(), "text/html; charset=utf-8")
+            return self._send(200, office_web.render_html(build_office_data(), live=True,
+                                                          embed=bool(q.get("embed"))),
                               "text/html; charset=utf-8")
-        return self._send(200, "🏢 ABK MEBEL AI-ofis ishlayapti. Ilova: /ofis")
+        return self._send(200, "🏢 ABK MEBEL AI-ofis ishlayapti. Ilova: /app")
 
     def do_POST(self):
+        if self.path.split("?")[0].startswith("/app/me"):
+            return self.app_me()
         if self.path.split("?")[0].startswith("/ofis/ask"):
+            if not self.office_allowed():
+                return self._send(403, json.dumps(
+                    {"ok": False, "locked": True, "agent": "", "name": "AI-xodim", "emoji": "🔒",
+                     "reply": "🔒 Ofis bo'limi faqat admin uchun. Mijozlar narx, manzil va "
+                              "buyurtma bo'limlaridan foydalanadi.", "action": None},
+                    ensure_ascii=False), "application/json; charset=utf-8")
             return self.office_ask()
         if not self.path.startswith("/webhook"):
             return self._send(404, "not found")
@@ -2348,6 +2400,25 @@ class WebhookHandler(BaseHTTPRequestHandler):
                              daemon=True).start()
         except Exception as e:
             log.error("Webhook xatosi: %s", e)
+
+    def app_me(self):
+        """Ilovadan kelgan initData ni tekshiradi: admin yoki oddiy mijoz?"""
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+        except Exception:
+            payload = {}
+        user = init_data_user(payload.get("initData") or payload.get("init_data") or "")
+        if user and is_admin_user_id(user.get("id")):
+            log.info("Ilova: ADMIN kirdi (%s, id=%s)", user.get("first_name"), user.get("id"))
+            return self._send(200, json.dumps(
+                {"ok": True, "admin": True, "name": user.get("first_name", ""),
+                 "token": make_office_session(user.get("id"))}, ensure_ascii=False),
+                "application/json; charset=utf-8")
+        if user:
+            log.info("Ilova: mijoz kirdi (%s, id=%s)", user.get("first_name"), user.get("id"))
+        return self._send(200, json.dumps({"ok": True, "admin": False}, ensure_ascii=False),
+                          "application/json; charset=utf-8")
 
     def office_ask(self):
         """Ilovadagi suhbat oynasidan kelgan savol/buyruq."""
@@ -2374,6 +2445,68 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+
+# --------------------------------------------------------------------------
+# Ilovaga faqat ADMIN kira olishi (Telegram initData ni HMAC bilan tekshirish)
+# --------------------------------------------------------------------------
+def _sig(key: bytes, msg: str) -> str:
+    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def init_data_user(init_data, max_age=86400):
+    """Telegram Mini App «initData» ni tekshiradi. To'g'ri bo'lsa — foydalanuvchi."""
+    if not init_data:
+        return None
+    try:
+        from urllib.parse import parse_qsl
+        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    except Exception:
+        return None
+    check_hash = pairs.pop("hash", "")
+    if not check_hash:
+        return None
+    data_check = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    secret = hmac.new(b"WebAppData", TOKEN.encode("utf-8"), hashlib.sha256).digest()
+    if not hmac.compare_digest(_sig(secret, data_check), check_hash):
+        log.warning("initData imzosi mos kelmadi")
+        return None
+    try:
+        auth_date = int(pairs.get("auth_date") or 0)
+        if max_age and auth_date and (time.time() - auth_date) > max_age:
+            return None
+        return json.loads(pairs.get("user") or "null")
+    except Exception:
+        return None
+
+
+def make_office_session(user_id, ttl=86400):
+    """Ofis bo'limi uchun qisqa muddatli kalit (imzo bilan)."""
+    exp = int(time.time()) + int(ttl)
+    return f"{user_id}.{exp}.{_sig(TOKEN.encode('utf-8'), f'{user_id}.{exp}')}"
+
+
+def check_office_session(token):
+    """Kalitni tekshiradi -> user_id yoki None."""
+    if not token or token.count(".") != 2:
+        return None
+    uid, exp, sign = token.split(".")
+    try:
+        if int(exp) < time.time():
+            return None
+    except ValueError:
+        return None
+    if hmac.compare_digest(_sig(TOKEN.encode("utf-8"), f"{uid}.{exp}"), sign):
+        try:
+            return int(uid)
+        except ValueError:
+            return None
+    return None
+
+
+def is_admin_user_id(uid):
+    aid = admin_id()
+    return aid is not None and str(uid) == str(aid)
 
 
 def run_webhook(port=None):
