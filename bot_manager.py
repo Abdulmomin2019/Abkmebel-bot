@@ -2074,7 +2074,7 @@ def handle_group_message(msg):
         answer_questions — botga qaratilmagan savollarga ham javob berish (standart: false)
         notify_admin     — har bir guruh savolini adminga ham yuborish (standart: true)
     """
-    g = bot_cfg().get("group") or {}
+    g = bot_cfg().get("group") or CONFIG.get("group") or {}   # bot.group (yoki eski joylashuv)
     if g.get("enabled", True) is False:
         return
 
@@ -2096,8 +2096,19 @@ def handle_group_message(msg):
     clean = strip_mention(text) if mentioned else text
     norm = normalize(clean)
     is_question = looks_like_question(clean, norm)
-    if not mentioned and not (g.get("answer_questions") and is_question):
-        return
+    greeting = is_greeting(norm) or is_thanks(norm)
+    if not mentioned:
+        if not g.get("answer_questions"):
+            return
+        if not (is_question or greeting):
+            return                                  # oddiy suhbatga aralashmaymiz
+        if greeting and not is_question:
+            # «Salom»/«rahmat» ga har bir kishiga soatiga bir marta javob (guruh toza qolsin)
+            wait = float(g.get("greet_hours", 3)) * 3600
+            key = str(user.get("id") or "")
+            if time.time() - _GROUP_GREET.get(key, 0) < wait:
+                return
+            _GROUP_GREET[key] = time.time()
 
     answer, kb, agent, kind = keyword_answer(clean, norm)
     if not answer or not agent_on(agent):
@@ -2113,7 +2124,7 @@ def handle_group_message(msg):
     if r.get("ok"):
         who = user.get("first_name") or user.get("username") or "mijoz"
         log_action(agent, "guruhda savolga javob berdi", f"{who}: «{clean[:50]}»", chat_id)
-        if g.get("notify_admin", True):
+        if g.get("notify_admin", True) and (mentioned or is_question):
             notify_admin(f"💬 <b>Guruhdagi savol</b> ({msg['chat'].get('title','guruh')})\n"
                          f"👤 {who}\n"
                          f"❓ {clean[:200]}\n\n"
@@ -2506,6 +2517,7 @@ def _sig(key: bytes, msg: str) -> str:
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+_GROUP_GREET = {}         # guruhda kimga qachon salomlashish javobi berildi
 _APP_VISITS = {}          # uid -> oxirgi xabar vaqti
 _APP_LAST_FAIL = [0.0]    # imzo o'tmagan holatlar
 _APP_DIAG = []            # oxirgi 20 ta ilova ochilishi (tashxis uchun)
