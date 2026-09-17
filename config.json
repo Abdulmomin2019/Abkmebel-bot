@@ -9,7 +9,8 @@
    "time": "09:00",
    "label": "Ofis ochildi + tilaklar",
    "mode": "rotate",
-   "content_file": "content-morning.txt"
+   "content_file": "content-morning.txt",
+   "exempt": true
   },
   {
    "time": "10:00",
@@ -33,21 +34,17 @@
    "content_file": "content.txt"
   },
   {
-   "time": "16:00",
+   "time": "17:00",
    "label": "Manzil va ish vaqti",
    "mode": "rotate",
-   "days": [
-    "mon",
-    "wed",
-    "fri"
-   ],
    "content_file": "content-info.txt"
   },
   {
    "time": "18:00",
    "label": "Ish vaqti tugadi + tilaklar",
    "mode": "rotate",
-   "content_file": "content-evening.txt"
+   "content_file": "content-evening.txt",
+   "exempt": true
   }
  ],
  "_slots_izoh": {
@@ -483,5 +480,8 @@
    ]
   },
   "optional_chance": 0.7
- }
+ },
+ "daily_post_limit": 3,
+ "min_post_gap_minutes": 30,
+ "_limit_izoh": "Kanalga 09:00–18:00 orasida kuniga ko'pi bilan 3 ta KONTENT posti yuboriladi. 09:00 (ofis ochildi) va 18:00 (ish tugadi) xabarlari chegaraga kirmaydi (exempt: true). Takror yuborishdan himoya: kanalning o'zi tekshiriladi + holat fayli + post orasidagi tanaffus."
 }
