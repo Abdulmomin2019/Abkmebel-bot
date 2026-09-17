@@ -1,0 +1,477 @@
+{
+  "_izoh": "GitHub Actions ishlatilsa bot_token va channel ni to'ldirish shart emas — ular Secrets dan avtomatik olinadi. Lokal (kompyuterda) ishlatilsa to'ldiring.",
+  "bot_token": "PUT_YOUR_BOT_TOKEN",
+  "channel": "@abk_mebel",
+  "timezone": "Asia/Tashkent",
+  "content_file": "content.txt",
+  "slots": [
+    {
+      "time": "09:00",
+      "label": "Ofis ochildi + tilaklar",
+      "mode": "rotate",
+      "content_file": "content-morning.txt"
+    },
+    {
+      "time": "10:00",
+      "label": "Juma tabrigi",
+      "mode": "rotate",
+      "days": [
+        "fri"
+      ],
+      "content_file": "content-friday.txt"
+    },
+    {
+      "time": "12:00",
+      "label": "Reklama posti (kunduz)",
+      "mode": "rotate",
+      "content_file": "content.txt"
+    },
+    {
+      "time": "15:00",
+      "label": "Reklama posti (tushdan keyin)",
+      "mode": "rotate",
+      "content_file": "content.txt"
+    },
+    {
+      "time": "16:00",
+      "label": "Manzil va ish vaqti",
+      "mode": "rotate",
+      "days": [
+        "mon",
+        "wed",
+        "fri"
+      ],
+      "content_file": "content-info.txt"
+    },
+    {
+      "time": "18:00",
+      "label": "Ish vaqti tugadi + tilaklar",
+      "mode": "rotate",
+      "content_file": "content-evening.txt"
+    }
+  ],
+  "_slots_izoh": {
+    "time": "Post yuboriladigan vaqt (Toshkent vaqti, 24 soat formatida)",
+    "label": "Faqat jurnal uchun nom",
+    "content_file": "Shu slot qaysi fayldan post oladi",
+    "days": "Kunlar: mon,tue,wed,thu,fri,sat,sun. Yozilmasa — har kuni. Masalan juma uchun [\"fri\"]",
+    "mode": "rotate — fayldagi postlar navbat bilan; fixed — har kuni bir xil matn; ai — AI yozadi",
+    "yangi_slot": "Yangi vaqt qo'shish uchun slots ichiga yana bitta {...} blok qo'shsangiz kifoya"
+  },
+  "ai": {
+    "api_key": "PUT_YOUR_OPENAI_KEY",
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "system": "Sen BAZIS-Mebel dasturida loyiha chizish va FastReport shablon/scriptlar bo'yicha xizmat ko'rsatuvchi mutaxassisning SMM vakilisan. O'zbek tilida, ishonchli va qisqa yozasan.",
+    "prompt": "BAZIS-Mebel dasturida loyiha chizish xizmati haqida qisqa reklama post yoz (5-8 qator). Narx: material kvadratiga 2$. Aloqa: @abkmebel. Oxirida 3 ta xeshteg."
+  },
+  "bot": {
+    "_izoh": "Menejer bot sozlamalari (bot_manager.py shu bo'limdan o'qiydi)",
+    "admin_id": 7707611721,
+    "username": "@abkmebel_javob_bot",
+    "price_per_sqm": 2,
+    "work_hours": {
+      "from": "09:00",
+      "to": "18:00",
+      "days": "*"
+    },
+    "daily_report": "18:30",
+    "weekly_report": {
+      "day": "fri",
+      "time": "18:35"
+    },
+    "portfolio": [
+      {
+        "photo": "images/mebel-render.jpg",
+        "caption": "🛋 Garderob va TV zona loyihasi — 3D ko'rinish + to'liq smeta"
+      },
+      {
+        "photo": "images/3d-loyiha.jpg",
+        "caption": "🍳 Oshxona loyihasi — o'lchamlar, detallar va kromka hisobi bilan"
+      },
+      {
+        "photo": "images/smeta.jpg",
+        "caption": "📊 Har bir loyiha uchun to'liq smeta va spetsifikatsiya"
+      }
+    ],
+    "welcome_new_members": false,
+    "spam_filter": {
+      "enabled": true,
+      "patterns": [
+        "http://",
+        "https://",
+        "t.me/",
+        "joinchat"
+      ],
+      "exempt_users": [],
+      "_izoh": "Izohlar guruhida (bot admin bo'lsa) havolali reklamalarni o'chiradi. O'chirish uchun enabled: false"
+    },
+    "faq": [
+      {
+        "q": "Loyiha qancha vaqtda tayyor bo'ladi?",
+        "a": "Kichik loyihalar (bitta xona) odatda 1–2 kun, katta loyihalar kelishilgan jadval bo'yicha tayyorlanadi. Aniq muddat o'lchamlarni ko'rgach aytiladi."
+      },
+      {
+        "q": "Narxga nimalar kiradi?",
+        "a": "Narxga 3D loyiha, detallarning to'g'ri nomlanishi, material va kromka hisobi, furnitura hisobi va to'liq smeta kiradi. Material kvadratiga 2$."
+      },
+      {
+        "q": "Menga qanday ma'lumot yuborishim kerak?",
+        "a": "Xona o'lchamlari (yoki eskiz/rasm), qanday mebel kerakligi va material bo'yicha xohishingiz. Shundan keyin narx va muddatni aytamiz."
+      },
+      {
+        "q": "FastReport shablonlari nima beradi?",
+        "a": "Smeta, spetsifikatsiya va hisobotlarni bir tugma bilan chiqaradi — qo'lda hisoblash va xatolar kamayadi. Narx ish hajmiga qarab kelishiladi."
+      },
+      {
+        "q": "To'lov qanday amalga oshiriladi?",
+        "a": "Ish boshlanishida kelishiladi. Buyurtma hajmiga qarab qismlarga bo'lish ham mumkin. Batafsil ma'lumot uchun adminga yozing."
+      },
+      {
+        "q": "Loyihani qanday qabul qilib olaman?",
+        "a": "Tayyor fayllar (chizma, smeta va hisobotlar) shu bot yoki Telegram orqali yuboriladi — ishlab chiqarishga tayyor holatda."
+      }
+    ],
+    "keywords": [
+      {
+        "keywords": [
+          "salom",
+          "assalom",
+          "xayrli",
+          "hayrli",
+          "privet",
+          "hello",
+          "hi"
+        ],
+        "agent": "suhbat",
+        "special": "greeting",
+        "menu": true
+      },
+      {
+        "keywords": [
+          "rahmat",
+          "raxmat",
+          "tashakkur",
+          "spasibo",
+          "thank"
+        ],
+        "agent": "suhbat",
+        "special": "thanks"
+      },
+      {
+        "keywords": [
+          "chiz",
+          "loyiha",
+          "proyekt",
+          "bazis",
+          "narx",
+          "qancha",
+          "pul",
+          "summa",
+          "hisob"
+        ],
+        "agent": "suhbat",
+        "special": "price"
+      },
+      {
+        "keywords": [
+          "ishlayapsizmi",
+          "ishlaysizmi",
+          "ochiqmi",
+          "qachon ishlay"
+        ],
+        "agent": "ofis",
+        "special": "address"
+      },
+      {
+        "keywords": [
+          "manzil",
+          "qayerda",
+          "qayerdasiz",
+          "adres",
+          "lokatsiya",
+          "joylashuv",
+          "xarita"
+        ],
+        "agent": "ofis",
+        "special": "address"
+      },
+      {
+        "keywords": [
+          "narx",
+          "narxi",
+          "qancha",
+          "necha pul",
+          "summa",
+          "pul"
+        ],
+        "answer": "📋 Narx: BAZIS-Mebel loyihasi — <b>material kvadratiga 2$</b>.\nMasalan, 10 m² loyiha ≈ 20$.\nFastReport shablon/scriptlar — ish hajmiga qarab kelishiladi.\n\nAniq summani hisoblash uchun menyudagi 🧮 <b>Narx kalkulyatori</b> bo'limidan foydalaning.",
+        "menu": true
+      },
+      {
+        "keywords": [
+          "kromka"
+        ],
+        "answer": "📐 Kromka hisobi loyihaga kiradi: har bir detal uchun kromka uzunligi alohida hisoblanadi va smetada ko'rsatiladi. Shu tufayli sexda kromka yetmay qolmaydi va ortiqcha xarid qilinmaydi."
+      },
+      {
+        "keywords": [
+          "fastreport",
+          "fast report",
+          "shablon",
+          "script",
+          "skript"
+        ],
+        "answer": "⚙️ FastReport shablon va scriptlar: smeta, spetsifikatsiya va hisobotlarni bir tugma bilan chiqaradi.\nSizning ish uslubingizga moslab yoziladi, o'rnatishda yordam beramiz.\nNarx: ish hajmiga qarab kelishiladi."
+      },
+      {
+        "keywords": [
+          "muddat",
+          "qachon",
+          "qancha vaqt",
+          "tez"
+        ],
+        "answer": "⏱ Muddat loyiha hajmiga bog'liq: kichik loyihalar 1–2 kun, katta loyihalar kelishilgan jadval bo'yicha. O'lchamlarni yuborsangiz, aniq muddatni aytamiz."
+      },
+      {
+        "keywords": [
+          "smeta",
+          "hisob",
+          "hisob-kitob"
+        ],
+        "answer": "🧮 Smeta loyiha bilan birga tayyorlanadi: material, kromka, furnitura va ish hajmi hisoblanadi. Smeta asosida mijozga aniq narx aytish mumkin."
+      },
+      {
+        "keywords": [
+          "bazis",
+          "basis",
+          "базис"
+        ],
+        "answer": "🗂 BAZIS-Mebel dasturida ishlaymiz: aniq o'lchamlar asosida 3D loyiha, detallarning to'g'ri nomlanishi va to'liq smeta. Narx — material kvadratiga 2$."
+      },
+      {
+        "keywords": [
+          "salom",
+          "assalom",
+          "xayrli"
+        ],
+        "answer": "Assalomu alaykum! 😊 Sizga qanday yordam bera olamiz?\nKerakli bo'limni tanlang yoki savolingizni yozib qoldiring — adminga yuboriladi.",
+        "menu": true
+      },
+      {
+        "keywords": [
+          "rahmat",
+          "tashakkur",
+          "raxmat"
+        ],
+        "answer": "Arzimaydi! 🤝 Savollaringiz bo'lsa bemalol yozing. Ishlaringizga muvaffaqiyat!"
+      }
+    ],
+    "address": {
+      "_izoh": "Mijozlarga ko'rsatiladigan manzil. Xarita tugmalari shu ma'lumotdan yasaladi.",
+      "name": "ABK MEBEL — «ABK FURNITURE STUDIO»",
+      "text": "Toshkent sh., 9754+W32 (Google Maps Plus Code)",
+      "plus_code": "9754+W32",
+      "maps_url": "https://maps.google.com/?q=9754%2BW32%20Tashkent",
+      "route_url": "https://www.google.com/maps/dir/?api=1&destination=9754%2BW32%20Tashkent",
+      "landmark": "Google Maps'da «ABK MEBEL» deb qidirsa ham topiladi",
+      "phone": "",
+      "transport": "",
+      "hours_text": "09:00 – 18:00 (har kuni)"
+    },
+    "agents": {
+      "postchi": {
+        "enabled": true
+      },
+      "menejer": {
+        "enabled": true
+      },
+      "ofis": {
+        "enabled": true
+      },
+      "suhbat": {
+        "enabled": true
+      }
+    },
+    "order_steps": [
+      {
+        "key": "name",
+        "q": "1/6 — <b>Ismingiz va familiyangiz?</b>",
+        "required": true
+      },
+      {
+        "key": "phone",
+        "q": "2/6 — <b>Telefon raqamingiz?</b> (yoki @username)",
+        "required": true
+      },
+      {
+        "key": "furniture",
+        "q": "3/6 — <b>Qanday mebel kerak va bo'linishlari?</b>\nMasalan: oshxona, 3 ta yuqori shkaf, 2 ta tortma, idish yuvish mashinasi uchun joy",
+        "required": true
+      },
+      {
+        "key": "sizes",
+        "q": "4/6 — <b>Gabarit o'lchamlar:</b> umumiy bo'y, eni, chuqurligi (yoki xona o'lchami — zamer natijasi)",
+        "required": true
+      },
+      {
+        "key": "material",
+        "q": "5/6 — <b>Material va furnitura:</b> LDSP/MDF turi, rangi, qalinligi, kromka rangi, mexanizmlar (Blum va h.k.)",
+        "required": false
+      },
+      {
+        "key": "deadline",
+        "q": "6/6 — <b>Muddat:</b> qachonga tayyor bo'lishi kerak?",
+        "required": false
+      }
+    ],
+    "premium_emojis_enabled": true,
+    "premium_emojis": {
+      "_izoh": "Bu yerga premium emoji ID lari yoziladi. Osonroq yo'l: botga premium emoji yuboring — bot uni o'zi o'rganib, shu yerga qo'shadi va keyin hammaga shunday yozadi."
+    },
+    "suhbat": {
+      "_izoh": "Suhbat agenti: shaxsiy xabarlar, samimiy muloqot, xato yozilgan savollarni tushunish",
+      "escalate_if_question": true,
+      "greetings": [
+        "Assalomu alaykum, {ism}! 😊 Qanday yordam bera olaman?",
+        "Salom, {ism}! Yozganingiz uchun rahmat 🙌 Nima qilib beray?",
+        "Assalomu alaykum! {ism}, marhamat — savolingizni yozing, javob beraman.",
+        "Salom-salom, {ism}! 😄 Nima gap, qanday ishlar?"
+      ],
+      "thanks": [
+        "Arzimaydi, {ism}! 🤝 Yana savol bo'lsa bemalol yozing.",
+        "Sizga rahmat! 😊 Ishlaringiz oson bo'lsin.",
+        "Doim xizmatingizdaman! 🙌"
+      ],
+      "bye": [
+        "Xayr, {ism}! Kuningiz yaxshi o'tsin 👋",
+        "Ko'rishguncha! Yaxshi kun tilayman 😊"
+      ],
+      "unclear": [
+        "Savolingizni to'liq tushunmadim, {ism}. Bir oz boshqacha yozib yuborolasizmi? 🙏\nYoki quyidagilardan birini tanlang — darhol javob beraman 👇",
+        "Kechirasiz, {ism}, tushunmadim 😅 Aniqlashtirsangiz yaxshi bo'lardi.\nYoki: «loyiha chizish», «narx», «manzil» deb yozing — men tushunaman."
+      ],
+      "price_hint": [
+        "Loyiha narxi: material kvadratiga <b>{narx}</b> 💰\nMasalan {narx10} — 10 m² loyiha uchun.\n\nAniq summani hisoblash uchun m² ni yozing yoki 🧮 <b>Kalkulyator</b> ni bosing 👇",
+        "BAZIS loyiha — m² uchun <b>{narx}</b> 💰 Kromka, furnitura va smeta hisobi narxga kiradi.\n\nMaydoningizni yozsangiz — hozir hisoblab beraman 😉"
+      ],
+      "smalltalk": [
+        "Rahmat, {ism}, o'zim ham yaxshi ishlayapman 😄 Loyiha bo'yicha savolingiz bo'lsa — ayting!",
+        "Yaxshi, rahmat! 😊 Sizga qanday yordam kerak — narx, loyiha yoki FastReport?"
+      ],
+      "notify_short": "Savol adminga ham yuborildi — ish vaqtida aniq javob beramiz 🙂"
+    },
+    "fuzzy": {
+      "_izoh": "Mijozlar xato/imloviy xato bilan yozadigan so'zlar. Chapdagisi — mijoz yozishi mumkin, o'ngdagisi — qanday tushuniladi.",
+      "replacements": {
+        "proyikt": "loyiha",
+        "prayekt": "loyiha",
+        "proekt": "loyiha",
+        "praekt": "loyiha",
+        "loyhani": "loyiha",
+        "loyihani": "loyiha",
+        "loyixa": "loyiha",
+        "loyxa": "loyiha",
+        "chzish": "chizish",
+        "chizib": "chizish",
+        "chizishga": "chizish",
+        "chizip": "chizish",
+        "narcha": "narx",
+        "narhi": "narx",
+        "narxi": "narx",
+        "naxr": "narx",
+        "qanchaqa": "qancha",
+        "baziz": "bazis",
+        "basis": "bazis",
+        "bazisa": "bazis",
+        "bazisda": "bazis",
+        "fastrepo": "fastreport",
+        "fastreportt": "fastreport",
+        "shablonlar": "shablon",
+        "kromkasi": "kromka",
+        "krOmka": "kromka",
+        "smetasi": "smeta",
+        "mebell": "mebel",
+        "skolko": "qancha",
+        "tsena": "narx",
+        "stoimost": "narx",
+        "сколько": "qancha",
+        "цена": "narx",
+        "стоимость": "narx",
+        "адрес": "manzil",
+        "чертеж": "loyiha",
+        "чертёж": "loyiha",
+        "проект": "loyiha",
+        "базис": "bazis",
+        "кромка": "kromka",
+        "смета": "smeta",
+        "здравствуйте": "salom",
+        "привет": "salom",
+        "спасибо": "rahmat",
+        "работаете": "ishlaysizmi"
+      }
+    },
+    "group": {
+      "enabled": true,
+      "answer_questions": false,
+      "_izoh": "Guruh/izohlar: bot @mention yoki javob (reply) bo'lsa javob beradi. answer_questions=true qilsangiz — botga qaratilmagan savollarga ham javob beradi (buning uchun @BotFather → /setprivacy → Disable yoki botni guruhga admin qiling).",
+      "notify_admin": true
+    },
+    "commands_extra": {
+      "guruh": "Kanal guruhi holati va qo'llanma"
+    },
+    "office_key": "abk9153"
+  },
+  "variator": {
+    "_izoh": "Post matnlarida {salom}, {cta}, {tip}, {rasm} kabi tokenlar bo'lsa — har safar boshqasi tanlanadi. Spintax ham ishlaydi: {Xayrli tong|Assalomu alaykum}",
+    "pools": {
+      "salom": [
+        "🕘 ABK MEBEL — ofisimiz ish boshladi!",
+        "☀️ Ish kunimiz davom etmoqda.",
+        "🏢 Bugun ham xizmatingizdamiz.",
+        "🤝 Yaxshi xabar bilan boshlaymiz:"
+      ],
+      "cta": [
+        "📩 Yozing: {aloqa}",
+        "📩 Aloqa: {aloqa}",
+        "💬 Savol bering: {aloqa}",
+        "👇 Murojaat uchun: {aloqa}",
+        "✍️ Yozib qoldiring: {aloqa}"
+      ],
+      "tip": [
+        "💡 Maslahat: loyihani oldindan hisoblab chiqsangiz, sexda material yetmay qolmaydi.",
+        "💡 Eslatma: detallar to'g'ri nomlansa, yig'ish 2 barobar tez ketadi.",
+        "💡 Sir: kromka hisobi aniq bo'lsa, ortiqcha xarid bo'lmaydi va foyda oshadi.",
+        "💡 Foydali: smetada furnitura alohida ko'rsatilsa, mijoz bilan nizo chiqmaydi.",
+        "💡 Amaliyotdan: prisyadka (teshiklar) sxemasi bo'lsa, ustanovka xatosiz bo'ladi.",
+        "💡 Amaliy: loyiha chizmasida mexanizm joylari ko'rsatilsa, ustanovka bir marta hal bo'ladi.",
+        "💡 Bilib qo'ying: material hisobi aniq bo'lsa, buyurtma narxini mijozga dadil aytish mumkin.",
+        "💡 Tajribadan: 3D ko'rinish qilingan loyiha kam qayta ishlanadi.",
+        "💡 Tejamkorlik: spetsifikatsiya aniq bo'lsa, ortiqcha furnitura sotib olinmaydi."
+      ],
+      "yakun": [
+        "Ishlaringizga baraka! 🌿",
+        "Kuningiz foydali o'tsin! ⚡",
+        "Yaxshi ishlar qiling, natija albatta keladi 💪",
+        "Bugungi qadam — ertangi natija 🚀",
+        "Ishonchingiz uchun rahmat! 🤝",
+        "Bugun yozsangiz — bugun javob olasiz ⚡",
+        "Sizga qulay vaqtda javob beramiz 🕘"
+      ],
+      "rasm": [
+        "images/3d-loyiha.jpg",
+        "images/mebel-render.jpg",
+        "images/detallar.jpg",
+        "images/fastreport.jpg",
+        "images/smeta.jpg"
+      ],
+      "qoshimcha": [
+        "📌 <i>Eslatma: loyiha narxi material maydoniga qarab hisoblanadi — kichik loyihalar ham qabul qilinadi.</i>",
+        "📌 <i>Eslatma: tayyor fayllar ishlab chiqarishga to'liq tayyor holatda beriladi.</i>",
+        "📌 <i>Eslatma: FastReport shablonlari BAZIS'ning turli versiyalariga moslanadi.</i>",
+        "📌 <i>Eslatma: o'lchamlarni rasmini yuborsangiz ham bo'ladi — biz aniqlashtiramiz.</i>"
+      ]
+    },
+    "optional_chance": 0.7
+  }
+}
