@@ -704,8 +704,15 @@ def register_user(user, is_bot=False):
     save_users(u)
 
 
+def admin_ids():
+    """Adminlar ro'yxati (ADMIN_ID="111,222" ko'rinishida ham bo'ladi)."""
+    raw = str(bot_cfg().get("admin_id") or "")
+    return {x.strip() for x in raw.replace(";", ",").split(",") if x.strip()}
+
+
 def admin_id():
-    return bot_cfg().get("admin_id")
+    ids = admin_ids()
+    return sorted(ids)[0] if ids else None
 
 
 def notify_admin(text):
@@ -1427,7 +1434,7 @@ def handle_private_message(msg):
     touch_day(now_tz().date().isoformat(), "messages")
 
     # 0a) Admin premium emoji yuborsa — bot o'rganib oladi
-    if admin_id() is not None and user.get("id") == admin_id() and extract_custom_emojis(msg):
+    if is_admin_user_id(user.get("id")) and extract_custom_emojis(msg):
         learn_premium_emoji(msg, chat_id)
         return
 
@@ -1569,7 +1576,7 @@ def handle_private_message(msg):
 
 def handle_command(chat_id, cmd, arg, user):
     aid = admin_id()
-    is_admin = aid is not None and user.get("id") == aid
+    is_admin = is_admin_user_id(user.get("id"))
 
     if cmd in ("/start", "/menu", "/help"):
         if arg in ("calc", "kalkulyator"):
@@ -1583,6 +1590,12 @@ def handle_command(chat_id, cmd, arg, user):
                          f"ℹ️ Sizning Telegram ID: <code>{user.get('id')}</code>\n\n"
                          f"Bot egasi bo'lsangiz, shu raqamni ADMIN_ID sifatida kiriting — "
                          f"shunda buyurtmalar, hisobotlar va AI-ofis sizga ko'rinadi.")
+        return True
+
+    if cmd in ("/id", "/kim", "/myid"):
+        reply(chat_id, f"🆔 <b>Sizning Telegram ID:</b> <code>{user.get('id')}</code>\n\n"
+                       f"Ism: {user.get('first_name', '')}\n"
+                       f"Admin bo'lsangiz, shu raqam ADMIN_ID ga yoziladi.")
         return True
 
     if cmd in ("/bekor", "/cancel"):
@@ -1929,7 +1942,11 @@ def handle_callback(cb):
     name = user.get("first_name", "")
     answer_callback_query(TOKEN, cb["id"])
 
-    if data == "menu:main":
+    if data == "myid":
+        reply(chat_id, f"🆔 <b>Sizning Telegram ID:</b> <code>{user.get('id')}</code>\n\n"
+                       f"Ism: {user.get('first_name', '')}\n"
+                       f"Admin bo'lsangiz, shu raqam ADMIN_ID ga yoziladi.")
+    elif data == "menu:main":
         send_main_menu(chat_id, name, edit_message=message_id)
     elif data == "menu:price":
         reply(chat_id, price_text(), reply_markup={"inline_keyboard": [
@@ -1973,7 +1990,7 @@ def handle_callback(cb):
         start_order(chat_id)
     # --- admin tugmalari ---
     elif data.startswith("adm:"):
-        if user.get("id") != admin_id():
+        if not is_admin_user_id(user.get("id")):
             return
         if data == "adm:log":
             handle_command(chat_id, "/log", "", user)
@@ -2366,6 +2383,14 @@ class WebhookHandler(BaseHTTPRequestHandler):
             return self._send(200, app_web.render_app(build_office_data(), live=True,
                                                       admin=allowed, session=tok),
                               "text/html; charset=utf-8", no_store=True)
+        if path.startswith("/app/diag"):
+            if not self.office_allowed():
+                return self._send(403, "🔒 faqat admin", "text/plain; charset=utf-8")
+            now = time.time()
+            return self._send(200, json.dumps({
+                "ok": True, "uptime_min": round((now - START_TIME) / 60, 1),
+                "admin_ids": sorted(admin_ids()), "visits": list(reversed(_APP_DIAG))},
+                ensure_ascii=False, indent=1), "application/json; charset=utf-8", no_store=True)
         if path.startswith("/app/panel"):
             import app_web
             if not self.office_allowed():
@@ -2414,17 +2439,36 @@ class WebhookHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
         except Exception:
             payload = {}
-        user = init_data_user(payload.get("initData") or payload.get("init_data") or "")
+        init = payload.get("initData") or payload.get("init_data") or ""
+        unsafe = payload.get("unsafeUser") if isinstance(payload.get("unsafeUser"), dict) else None
+        user = init_data_user(init)
         if user and is_admin_user_id(user.get("id")):
             log.info("Ilova: ADMIN kirdi (%s, id=%s)", user.get("first_name"), user.get("id"))
+            diag_add({"verified": True, "uid": user.get("id"), "name": user.get("first_name") or "—",
+                      "reason": "ADMIN ✅", "init_len": len(init or ""),
+                      "init_head": (init or "")[:70], "unsafe": (unsafe or {}).get("id")})
             return self._send(200, json.dumps(
-                {"ok": True, "admin": True, "name": user.get("first_name", ""),
+                {"ok": True, "admin": True, "name": user.get("first_name", ""), "uid": user.get("id"),
                  "token": make_office_session(user.get("id"))}, ensure_ascii=False),
                 "application/json; charset=utf-8")
         if user:
             log.info("Ilova: mijoz kirdi (%s, id=%s)", user.get("first_name"), user.get("id"))
-        return self._send(200, json.dumps({"ok": True, "admin": False}, ensure_ascii=False),
-                          "application/json; charset=utf-8")
+            reason = "foydalanuvchi admin emas"
+        else:
+            reason = "initData bo'sh" if not init else "imzo yoki amal muddati mos kelmadi"
+            log.warning("Ilova: initData tekshiruvdan o'tmadi (%s)", reason)
+        diag_add({"verified": bool(user), "uid": (user or unsafe or {}).get("id"),
+                  "name": (user or unsafe or {}).get("first_name") or "—", "reason": reason,
+                  "init_len": len(init or ""), "init_head": (init or "")[:70],
+                  "unsafe": (unsafe or {}).get("id")})
+        try:
+            office_visit_notice(user, unsafe, init, reason)
+        except Exception as e:
+            log.error("office_visit_notice xatosi: %s", e)
+        return self._send(200, json.dumps(
+            {"ok": True, "admin": False, "verified": bool(user),
+             "uid": (user or unsafe or {}).get("id")}, ensure_ascii=False),
+            "application/json; charset=utf-8")
 
     def office_ask(self):
         """Ilovadagi suhbat oynasidan kelgan savol/buyruq."""
@@ -2460,6 +2504,55 @@ def _sig(key: bytes, msg: str) -> str:
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+_APP_VISITS = {}          # uid -> oxirgi xabar vaqti
+_APP_LAST_FAIL = [0.0]    # imzo o'tmagan holatlar
+_APP_DIAG = []            # oxirgi 20 ta ilova ochilishi (tashxis uchun)
+START_TIME = time.time()
+
+
+def diag_add(entry):
+    entry["t"] = time.strftime("%d.%m %H:%M:%S", time.localtime())
+    _APP_DIAG.append(entry)
+    del _APP_DIAG[:-20]
+
+
+def office_visit_notice(user, unsafe, init_data, reason):
+    """Ilova ochilganda adminni xabardor qiladi: kim kirdi / nima xato bo'ldi."""
+    aid = admin_id()
+    if not aid:
+        return
+    now = time.time()
+    if user:
+        uid = str(user.get("id") or "")
+        if is_admin_user_id(uid):
+            return                                    # admin — xabar kerak emas
+        if now - _APP_VISITS.get(uid, 0) < 21600:
+            return                                    # 6 soatda bir marta
+        _APP_VISITS[uid] = now
+        name = user.get("first_name") or "Noma'lum"
+        uname = (" @" + user["username"]) if user.get("username") else ""
+        reply(aid, (
+            f"👤 <b>Ilovani kimdir ochdi</b>\n\n{name}{uname}\n"
+            f"Telegram ID: <code>{uid}</code>\n\n"
+            f"Bu siz bo'lsangiz — shu ID ni menga aytib qo'ying, "
+            f"Ofis bo'limi darhol ochiladi."))
+        return
+    if now - _APP_LAST_FAIL[0] < 600:
+        return                                        # 10 daqiqada bir marta
+    _APP_LAST_FAIL[0] = now
+    u = unsafe or {}
+    reply(aid, (
+        "⚠️ <b>Ilova Telegram ma'lumotini yubormadi</b>\n\n"
+        f"Sabab: {reason}\n"
+        f"Foydalanuvchi: {u.get('first_name') or '—'} "
+        f"(id: <code>{u.get('id') or '—'}</code>)\n\n"
+        f"initData: <code>{(init_data or '—')[:120]}</code>"))
+
+
+def _dc_pairs(pairs):
+    return "\n".join("%s=%s" % (k, pairs[k]) for k in sorted(pairs))
+
+
 def init_data_user(init_data, max_age=86400):
     """Telegram Mini App «initData» ni tekshiradi. To'g'ri bo'lsa — foydalanuvchi."""
     if not init_data:
@@ -2472,9 +2565,22 @@ def init_data_user(init_data, max_age=86400):
     check_hash = pairs.pop("hash", "")
     if not check_hash:
         return None
-    data_check = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    # Telegram ba'zi mijozlarda qiymatlarni xom (percent-encoded) holda imzolaydi,
+    # ba'zilarida dekodlangan holda — ikkalasini ham tekshiramiz.
+    raw_pairs = {}
+    for part in init_data.split("&"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            raw_pairs[k] = v
+    raw_pairs.pop("hash", None)
+    pairs.pop("hash", None)
     secret = hmac.new(b"WebAppData", TOKEN.encode("utf-8"), hashlib.sha256).digest()
-    if not hmac.compare_digest(_sig(secret, data_check), check_hash):
+    ok = False
+    for variant in (_dc_pairs(pairs), _dc_pairs(raw_pairs)):
+        if variant and hmac.compare_digest(_sig(secret, variant), check_hash):
+            ok = True
+            break
+    if not ok:
         log.warning("initData imzosi mos kelmadi")
         return None
     try:
@@ -2511,8 +2617,7 @@ def check_office_session(token):
 
 
 def is_admin_user_id(uid):
-    aid = admin_id()
-    return aid is not None and str(uid) == str(aid)
+    return str(uid or "") in admin_ids()
 
 
 def run_webhook(port=None):
