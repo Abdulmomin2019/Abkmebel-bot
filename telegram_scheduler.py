@@ -474,7 +474,7 @@ def run_due(cfg, grace_minutes=DUE_GRACE_MINUTES, dry_run=False):
         if last_gap is not None:
             same_slot_today = [t for t in channel_post_datetimes()
                                if t.date() == now.date()
-                               and abs((t - slot_dt).total_seconds()) <= 8 * 60]
+                               and -8 * 60 <= (t - slot_dt).total_seconds() <= 25 * 60]
             if same_slot_today:
                 log.info("• %s %s — kanalda allaqachon bor (takror yuborilmaydi).",
                          slot["time"], slot.get("label", ""))
