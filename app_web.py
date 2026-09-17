@@ -23,10 +23,18 @@ Server manzillari (bot_manager.py ichida):
 import json
 
 
-def render_app(data, live=False):
-    """Mini App sahifasini yasaydi."""
+def render_app(data, live=False, admin=False, session=""):
+    """Mini App sahifasini yasaydi.
+
+    admin=True  — egasi (admin) uchun: 🏢 Ofis (odam qiyofasidagi jonli ofis) va 📊 Panel
+    admin=False — mijozlar uchun: faqat 📋 Narxlar, ✍️ Buyurtma, 📍 Manzil, 🤖 Bot
+    """
+    if not admin:
+        data = dict(data)                     # mijozga xodimlar/jurnal ko'rsatilmaydi
+        data.pop("agents", None)
+        data.pop("log", None)
     agents = data.get("agents", [])
-    office_html = _office_section(agents, data)
+    office_html = _office_section(agents, data, admin=admin, session=session)
     price_html = _price_section(data)
     order_html = _order_section(data)
     address_html = _address_section(data)
@@ -44,7 +52,12 @@ def render_app(data, live=False):
                    .replace("__TIME__", data.get("time", "")) \
                    .replace("__DATE__", data.get("date", "")) \
                    .replace("__LIVE__", "true" if live else "false") \
-                   .replace("__SNAPSHOT__", json.dumps(data, ensure_ascii=False))
+                   .replace("__SNAPSHOT__", json.dumps(data, ensure_ascii=False)) \
+                   .replace("__ADMIN__", "true" if admin else "false") \
+                   .replace("__SESSION__", session or "") \
+                   .replace("__ACTIVE_OFFICE__", " active" if admin else "") \
+                   .replace("__HIDDEN_OFFICE__", "" if admin else " hidden") \
+                   .replace("__HIDDEN_PANEL__", "" if admin else " hidden")
 
 
 def _looks(agents):
@@ -53,7 +66,22 @@ def _looks(agents):
     return {a["key"]: colors.get(a["key"], "#64748b") for a in agents}
 
 
-def _office_section(agents, data):
+def _office_section(agents, data, admin=False, session=""):
+    """🏢 Ofis bo'limi.
+
+    Admin uchun: /ofis sahifasi (xodimlar ODAM QIYOFASIDA, ish stoli, monitor,
+    tanaffus — hammasi jonli) ilova ichida ochiladi.
+    Mijozlar uchun bu bo'lim umuman ko'rsatilmaydi.
+    """
+    if not admin:
+        return '<div class="muted">🔒 Bu bo\'lim faqat admin uchun.</div>'
+    src = "/ofis?embed=1" + ("&t=" + session if session else "")
+    return (f'<iframe class="oframe" id="oframe" src="{src}" loading="lazy" '
+            f'referrerpolicy="same-origin"></iframe>')
+
+
+def _office_cards(agents, data):
+    """Xodimlar kartalari (📊 Panel bo'limi uchun)."""
     colors = _looks(agents)
     cards = []
     for a in agents:
@@ -183,7 +211,8 @@ def _panel_section(data):
     </div>
     <p class="muted">{data.get('next_report','')}</p>
     <button class="btn wide" data-jump="ofis">🏢 Xodimlar holatini ko'rish</button>
-  </div>'''
+  </div>
+  {_office_cards(data.get("agents", []), data) if data.get("agents") else ""}'''
 
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -200,21 +229,21 @@ TEMPLATE = r"""<!DOCTYPE html>
   </header>
 
   <main id="views">
-    <section class="view active" id="v-ofis">__OFFICE__</section>
+    <section class="view__ACTIVE_OFFICE__" id="v-ofis"__HIDDEN_OFFICE__>__OFFICE__</section>
     <section class="view" id="v-price">__PRICE__</section>
     <section class="view" id="v-order">__ORDER__</section>
     <section class="view" id="v-address">__ADDRESS__</section>
     <section class="view" id="v-bot">__BOT__</section>
-    <section class="view" id="v-panel">__PANEL__</section>
+    <section class="view" id="v-panel"__HIDDEN_PANEL__>__PANEL__</section>
   </main>
 
   <nav class="tabs">
-    <button class="tab active" data-v="ofis">🏢<span>Ofis</span></button>
+    <button class="tab__ACTIVE_OFFICE__" data-v="ofis" data-admin="1"__HIDDEN_OFFICE__>🏢<span>Ofis</span></button>
     <button class="tab" data-v="price">📋<span>Narxlar</span></button>
     <button class="tab" data-v="order">✍️<span>Buyurtma</span></button>
     <button class="tab" data-v="address">📍<span>Manzil</span></button>
     <button class="tab" data-v="bot">🤖<span>Bot</span></button>
-    <button class="tab" data-v="panel">📊<span>Panel</span></button>
+    <button class="tab" data-v="panel" data-admin="1"__HIDDEN_PANEL__>📊<span>Panel</span></button>
   </nav>
 </div>
 
@@ -232,6 +261,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 const LIVE = __LIVE__;
+const ADMIN = __ADMIN__;
+const SESSION = "__SESSION__";
 const DATA = __SNAPSHOT__;
 const AG = {};
 (DATA.agents || []).forEach(a => AG[a.key] = a);
@@ -256,6 +287,40 @@ try {
   TG = window.Telegram ? window.Telegram.WebApp : null;
   if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#0d1526'); TG.setBackgroundColor?.('#080e1a'); }
 } catch (e) {}
+
+/* --- Kim kirgan? Faqat ADMIN ofisni ko'radi --- */
+function unlockOffice(token) {
+  if (!token) return;
+  const ofis = document.getElementById('v-ofis');
+  if (ofis && !ofis.querySelector('iframe')) {
+    ofis.innerHTML = '<iframe class="oframe" src="/ofis?embed=1&t=' +
+      encodeURIComponent(token) + '" referrerpolicy="same-origin"></iframe>';
+  }
+  document.querySelectorAll('[data-admin]').forEach(el => el.removeAttribute('hidden'));
+  const v = document.getElementById('v-ofis');
+  if (v) v.classList.add('active');
+  const nav = document.querySelector('.tab[data-v="ofis"]');
+  if (nav) nav.classList.add('active');
+  document.querySelector('.tab[data-v="price"]')?.classList.remove('active');
+  document.querySelectorAll('.view').forEach(s => { if (s.id !== 'v-ofis') s.classList.remove('active'); });
+  fetch('/app/panel' + (token ? '?t=' + encodeURIComponent(token) : ''))
+    .then(r => r.ok ? r.text() : '')
+    .then(html => { if (html) document.getElementById('v-panel').innerHTML = html; })
+    .catch(() => {});
+}
+
+async function whoami() {
+  if (ADMIN) return;
+  const init = (TG && TG.initData) || '';
+  if (!init) return;                       // brauzerda ochilgan — mijoz ko'rinishi qoladi
+  try {
+    const r = await fetch('/app/me', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                      body: JSON.stringify({initData: init})});
+    const j = await r.json();
+    if (j && j.admin) unlockOffice(j.token);
+  } catch (e) {}
+}
+whoami();
 
 /* --- vaqt --- */
 setInterval(() => {
@@ -420,6 +485,9 @@ document.getElementById('minput').addEventListener('keydown', e => {
 
   .tabs { position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:space-around;
     background:rgba(12,20,34,.97); border-top:1px solid #223350; padding:6px 4px calc(6px + env(safe-area-inset-bottom)) }
+  [hidden] { display:none !important }
+  .oframe { display:block; width:100%; height:calc(100vh - 128px); border:0; border-radius:16px;
+            background:#0b1220; box-shadow:0 10px 30px rgba(0,0,0,.35) }
   .tab { background:none; border:0; color:#7d92ad; font-size:17px; display:flex; flex-direction:column;
     align-items:center; gap:2px; cursor:pointer; padding:4px 8px; border-radius:10px }
   .tab span { font-size:9.5px } .tab.active { color:#ffd97a; background:rgba(255,217,122,.08) }
