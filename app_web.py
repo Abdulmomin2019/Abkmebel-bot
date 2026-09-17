@@ -338,19 +338,24 @@ function watchFrame(src) {
   }, 3500);
 }
 
-async function whoami() {
-  if (ADMIN) return;
+async function whoami(tries) {
+  if (ADMIN) return;                                  // kalit bilan kirgan — tayyor
+  tries = tries || 0;
   const init = (TG && TG.initData) || '';
-  if (!init) return;                       // brauzerda ochilgan — mijoz ko'rinishi qoladi
+  const unsafeUser = (TG && TG.initDataUnsafe && TG.initDataUnsafe.user) || null;
+  /* Ba'zi Telegram mijozlarida ma'lumot kech keladi — bir necha marta kutamiz */
+  if (!init && tries < 4) { setTimeout(() => whoami(tries + 1), 1200); return; }
+  if (!init && !unsafeUser) return;                   // oddiy brauzerda ochilgan
   try {
-    const unsafeUser = (TG && TG.initDataUnsafe && TG.initDataUnsafe.user) || null;
     const r = await fetch('/app/me', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                       body: JSON.stringify({initData: init, unsafeUser: unsafeUser})});
     const j = await r.json();
     if (j && j.admin) unlockOffice(j.token);
-  } catch (e) {}
+  } catch (e) {
+    if (tries < 3) setTimeout(() => whoami(tries + 1), 1500);   // internet uzilsa qayta
+  }
 }
-whoami();
+try { whoami(); } catch (e) {}
 
 /* --- vaqt --- */
 setInterval(() => {
