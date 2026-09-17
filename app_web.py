@@ -343,8 +343,9 @@ async function whoami() {
   const init = (TG && TG.initData) || '';
   if (!init) return;                       // brauzerda ochilgan — mijoz ko'rinishi qoladi
   try {
+    const unsafeUser = (TG && TG.initDataUnsafe && TG.initDataUnsafe.user) || null;
     const r = await fetch('/app/me', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                                      body: JSON.stringify({initData: init})});
+                                      body: JSON.stringify({initData: init, unsafeUser: unsafeUser})});
     const j = await r.json();
     if (j && j.admin) unlockOffice(j.token);
   } catch (e) {}
