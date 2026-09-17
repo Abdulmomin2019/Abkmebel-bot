@@ -340,15 +340,21 @@ def send_address(chat_id):
     a = bot_cfg().get("address", {})
     reply(chat_id, address_text(), reply_markup=address_keyboard())
     try:
-        reply_photo(chat_id, a.get("map_photo") or "images/manzil-xarita.jpg",
-                    "🗺 <b>Bizning joylashuvimiz</b> — xaritada qizil belgi")
+        r = reply_photo(chat_id, a.get("map_photo") or "images/manzil-xarita.jpg",
+                        "🗺 <b>Bizning joylashuvimiz</b> — xaritada qizil belgi")
+        if not (r or {}).get("ok"):
+            note_send_fail(chat_id, (r or {}).get("description") or "rasm yuborilmadi", "manzil rasmi")
     except Exception as e:
         log.warning("manzil rasmi yuborilmadi: %s", e)
+        note_send_fail(chat_id, str(e), "manzil rasmi")
     if a.get("lat") and a.get("lng"):
         try:
-            send_location(TOKEN, chat_id, a["lat"], a["lng"])
+            r = send_location(TOKEN, chat_id, a["lat"], a["lng"])
+            if not (r or {}).get("ok"):
+                note_send_fail(chat_id, (r or {}).get("description") or "lokatsiya yuborilmadi", "lokatsiya")
         except Exception as e:
             log.warning("lokatsiya yuborilmadi: %s", e)
+            note_send_fail(chat_id, str(e), "lokatsiya")
     log_action("ofis", "manzil ma'lumoti yuborildi", f"mijoz {chat_id}", chat_id, emoji="📍")
 
 
@@ -380,16 +386,22 @@ def send_dalolatnoma(chat_id):
         [{"text": "📍 Manzil", "callback_data": "menu:address"},
          {"text": "⬅️ Asosiy menyu", "callback_data": "menu:main"}]]})
     try:
-        reply_photo(chat_id, d.get("photo") or "images/dalolatnoma-1.png",
-                    "📄 Dalolatnoma — «Loyihani tasdiqlash va qabul qilish»")
+        r = reply_photo(chat_id, d.get("photo") or "images/dalolatnoma-1.png",
+                        "📄 Dalolatnoma — «Loyihani tasdiqlash va qabul qilish»")
+        if not (r or {}).get("ok"):
+            note_send_fail(chat_id, (r or {}).get("description") or "rasm yuborilmadi", "dalolatnoma rasmi")
     except Exception as e:
         log.warning("dalolatnoma rasmi yuborilmadi: %s", e)
+        note_send_fail(chat_id, str(e), "dalolatnoma rasmi")
     try:
-        send_document(TOKEN, chat_id, d.get("pdf") or "images/dalolatnoma.pdf",
-                      caption="📄 Dalolatnoma (PDF) — yuklab oling yoki chiqarib oling",
-                      base_dir=BASE_DIR)
+        r = send_document(TOKEN, chat_id, d.get("pdf") or "images/dalolatnoma.pdf",
+                          caption="📄 Dalolatnoma (PDF) — yuklab oling yoki chiqarib oling",
+                          base_dir=BASE_DIR)
+        if not (r or {}).get("ok"):
+            note_send_fail(chat_id, (r or {}).get("description") or "PDF yuborilmadi", "dalolatnoma PDF")
     except Exception as e:
         log.warning("dalolatnoma PDF yuborilmadi: %s", e)
+        note_send_fail(chat_id, str(e), "dalolatnoma PDF")
     log_action("menejer", "dalolatnoma yuborildi (yozma + rasm + PDF)",
                f"mijoz {chat_id}", chat_id, emoji="📄")
 
@@ -1706,6 +1718,10 @@ def handle_command(chat_id, cmd, arg, user):
                          f"ℹ️ Sizning Telegram ID: <code>{user.get('id')}</code>\n\n"
                          f"Bot egasi bo'lsangiz, shu raqamni ADMIN_ID sifatida kiriting — "
                          f"shunda buyurtmalar, hisobotlar va AI-ofis sizga ko'rinadi.")
+        return True
+
+    if cmd in ("/klaviatura", "/keyboard", "/menu_yangila"):
+        reply(chat_id, "⌨️ Yangi tugmalar yangilandi 👇", reply_markup=client_keyboard())
         return True
 
     if cmd in ("/id", "/kim", "/myid"):
