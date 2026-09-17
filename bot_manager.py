@@ -52,6 +52,7 @@ from tg_api import (  # noqa: E402
     set_webhook, delete_webhook, get_webhook_info, forward_message, ALL_UPDATES,
     set_menu_button,
     send_message_rich, send_photo_rich, build_custom_emoji_entities, extract_custom_emojis,
+    send_document, send_location,
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -305,33 +306,103 @@ def after_hours_note():
 
 
 def address_text():
+    """📍 Manzil matni — faqat manzil ma'lumoti (buyurtma bilan bog'liq emas)."""
     a = bot_cfg().get("address", {})
     lines = ["📍 <b>Bizning manzil</b>", ""]
     if a.get("name"):
-        lines.append(f"🏢 {a['name']}")
+        lines.append(f"🏢 <b>{a['name']}</b>")
     if a.get("text"):
         lines.append(f"📍 {a['text']}")
-    if a.get("plus_code"):
-        lines.append(f"🧭 Plus Code: <code>{a['plus_code']}</code> (Google Maps'ga kiriting)")
     if a.get("landmark"):
-        lines.append(f"🚩 Mo'ljal: {a['landmark']}")
-    lines.append(f"🕘 Ish vaqti: <b>{hours_text()}</b>")
+        lines.append(f"🚩 {a['landmark']}")
+    if a.get("plus_code"):
+        lines.append(f"🧭 Plus Code: <code>{a['plus_code']}</code>")
+    lines.append(f"🕘 Ish vaqti: <b>{a.get('hours_text') or hours_text()}</b>")
     if a.get("transport"):
         lines.append(f"🚌 {a['transport']}")
     lines.append("")
-    lines.append("🗺 Xaritada ochish uchun quyidagi tugmani bosing yoki shu havoladan foydalaning:")
+    lines.append("🗺 <b>Xarita havolalari</b>")
     if a.get("maps_url"):
-        lines.append(a["maps_url"])
+        lines.append(f"• Google Maps — {a['maps_url']}")
+    if a.get("yandex_url"):
+        lines.append(f"• Yandex Maps — {a['yandex_url']}")
+    lines.append("")
+    lines.append("📌 Quyida <b>xarita rasmi</b> va <b>lokatsiya</b> yuborildi — belgini bosib "
+                 "marshrut (yo'l ko'rsatish) olasiz.")
     lines.append("")
     lines.append(f"✍️ Kelishdan oldin {USERNAME} ga yozib qo'ysangiz — darhol xizmat ko'rsatamiz.")
     return "\n".join(lines)
 
 
+def send_address(chat_id):
+    """📍 Manzil bo'limi — FAQAT manzil: matn + xarita rasmi + lokatsiya + havolalar.
+    (Hech qanday buyurtma anketasi ishga tushmaydi.)"""
+    a = bot_cfg().get("address", {})
+    reply(chat_id, address_text(), reply_markup=address_keyboard())
+    try:
+        reply_photo(chat_id, a.get("map_photo") or "images/manzil-xarita.jpg",
+                    "🗺 <b>Bizning joylashuvimiz</b> — xaritada qizil belgi")
+    except Exception as e:
+        log.warning("manzil rasmi yuborilmadi: %s", e)
+    if a.get("lat") and a.get("lng"):
+        try:
+            send_location(TOKEN, chat_id, a["lat"], a["lng"])
+        except Exception as e:
+            log.warning("lokatsiya yuborilmadi: %s", e)
+    log_action("ofis", "manzil ma'lumoti yuborildi", f"mijoz {chat_id}", chat_id, emoji="📍")
+
+
+def dalolatnoma_info_text():
+    d = bot_cfg().get("dalolatnoma") or {}
+    return ("📄 <b>DALOLATNOMA — mijoz nimalarga tayyor bo'lishi kerak</b>\n"
+            "<i>(«Loyihani tasdiqlash va qabul qilish dalolatnomasi» asosida)</i>\n\n"
+            "1️⃣ <b>TOMONLAR</b>\n"
+            "   • Buyurtmachi F.I.O\n"
+            "   • Telefon raqami\n\n"
+            "2️⃣ <b>LOYIHA UCHUN ANIQ MA'LUMOTLAR</b>\n"
+            "   • <b>Gabarit va aniq o'lchamlar</b> — bo'yi, eni, chuqurligi, xonaga moslash (zamer)\n"
+            "   • <b>Mebel turi va bo'linishlari</b> — polkalar orasidagi masofa, tortmalar o'lchami\n"
+            "   • <b>Material va furnitura</b> — aniq nomi, rangi, qalinligi, mexanizm turlari\n\n"
+            "3️⃣ <b>LOYIHACHI MAJBURIYATI</b>\n"
+            "   • Chizma BAZIS-Mebel dasturida, siz aytgan o'lcham va talablar doirasida tayyorlanadi\n\n"
+            "4️⃣ <b>BUYURTMACHI MAJBURIYATI</b>\n"
+            "   • Ma'lumotlar to'liq va aniq bo'lishi\n"
+            "   • Loyiha tasdiqlangach imzo qo'yiladi\n\n"
+            "5️⃣ <b>IMZOLAR</b> — buyurtmachi va loyihachi\n\n"
+            "📎 Quyida: <b>rasm</b> ko'rinishida va <b>PDF</b> (chiqarib olish uchun).\n"
+            "✍️ Tayyor bo'lsangiz — «✍️ Buyurtma berish» tugmasini bosing.")
+
+def send_dalolatnoma(chat_id):
+    """Dalolatnoma bo'limi: yozma ma'lumot + rasm + PDF."""
+    d = bot_cfg().get("dalolatnoma") or {}
+    reply(chat_id, dalolatnoma_info_text(), reply_markup={"inline_keyboard": [
+        [{"text": "✍️ Buyurtma berish", "callback_data": "menu:order"}],
+        [{"text": "📍 Manzil", "callback_data": "menu:address"},
+         {"text": "⬅️ Asosiy menyu", "callback_data": "menu:main"}]]})
+    try:
+        reply_photo(chat_id, d.get("photo") or "images/dalolatnoma-1.png",
+                    "📄 Dalolatnoma — «Loyihani tasdiqlash va qabul qilish»")
+    except Exception as e:
+        log.warning("dalolatnoma rasmi yuborilmadi: %s", e)
+    try:
+        send_document(TOKEN, chat_id, d.get("pdf") or "images/dalolatnoma.pdf",
+                      caption="📄 Dalolatnoma (PDF) — yuklab oling yoki chiqarib oling",
+                      base_dir=BASE_DIR)
+    except Exception as e:
+        log.warning("dalolatnoma PDF yuborilmadi: %s", e)
+    log_action("menejer", "dalolatnoma yuborildi (yozma + rasm + PDF)",
+               f"mijoz {chat_id}", chat_id, emoji="📄")
+
+
 def address_keyboard():
     a = bot_cfg().get("address", {})
     rows = []
-    if a.get("maps_url"):
-        rows.append([{"text": "🗺 Xaritada ochish", "url": a["maps_url"]}])
+    google = a.get("maps_url") or ""
+    yandex = a.get("yandex_url") or ""
+    if google or yandex:
+        rows.append([b for b in (
+            {"text": "🗺 Google Maps", "url": google} if google else None,
+            {"text": "🟡 Yandex Maps", "url": yandex} if yandex else None) if b])
     if a.get("route_url"):
         rows.append([{"text": "🚕 Marshrut (yo'l ko'rsatish)", "url": a["route_url"]}])
     if a.get("phone"):
@@ -351,8 +422,9 @@ def menu_keyboard():
          {"text": "📍 Manzil va ish vaqti", "callback_data": "menu:address"}],
         [{"text": "⚙️ FastReport shablon/script", "callback_data": "menu:fastreport"},
          {"text": "🖼 Namuna loyihalar", "callback_data": "menu:portfolio"}],
-        [{"text": "❓ Ko'p so'raladigan savollar", "callback_data": "menu:faq"},
-         {"text": "📞 Aloqa", "callback_data": "menu:contact"}],
+        [{"text": "📄 Dalolatnoma", "callback_data": "menu:dalolatnoma"},
+         {"text": "❓ Ko'p so'raladigan savollar", "callback_data": "menu:faq"}],
+        [{"text": "📞 Aloqa", "callback_data": "menu:contact"}],
     ]}
 
 
@@ -367,6 +439,7 @@ def client_keyboard():
         [{"text": "✍️ Buyurtma berish"}, {"text": "📍 Manzil"}],
         [{"text": "⚙️ FastReport"}, {"text": "🖼 Namunalar"}],
         [{"text": "❓ Savollar"}, {"text": "👤 Profil"}],
+        [{"text": "📄 Dalolatnoma"}],
     ], "resize_keyboard": True, "is_persistent": True}
 
 
@@ -375,6 +448,7 @@ CLIENT_BUTTONS = {
     "✍️ buyurtma berish": "menu:order", "📍 manzil": "menu:address",
     "⚙️ fastreport": "menu:fastreport", "🖼 namunalar": "menu:portfolio",
     "❓ savollar": "menu:faq", "👤 profil": "menu:profile",
+    "📄 dalolatnoma": "menu:dalolatnoma",
     "🏢 ai-ofis": "menu:ofis",
 }
 
@@ -1485,9 +1559,15 @@ def handle_private_message(msg):
                      reply_markup=back_keyboard())
         return
 
-    # 0b) Pastdagi doimiy tugmalar bosilganda
+    # 0b) Pastdagi doimiy tugmalar bosilganda — HAR DOIM ishlaydi.
+    #     (Anketa to'ldirilayotgan bo'lsa ham: tugma javob sifatida qabul qilinmaydi,
+    #      anketa to'xtatiladi va mijoz kutgan bo'lim ochiladi.)
     btn = CLIENT_BUTTONS.get(text.lower())
-    if btn and not flow_pending(chat_id):
+    if btn:
+        if flow_pending(chat_id):
+            pop_flow(chat_id)
+            reply(chat_id, "ℹ️ Buyurtma to'ldirish to'xtatildi. Kerak bo'lsa «✍️ Buyurtma berish» "
+                           "tugmasi bilan qaytadan boshlashingiz mumkin.")
         handle_callback({"id": "0", "from": user, "data": btn,
                          "message": {"chat": {"id": chat_id}, "message_id": 0}})
         return
@@ -1504,6 +1584,9 @@ def handle_private_message(msg):
 
     # 1) Tugallanmagan suhbat
     flow = get_flow(chat_id)
+    if flow and text and CLIENT_BUTTONS.get(text.lower()):
+        pop_flow(chat_id)
+        flow = None                                    # himoya: tugma matni javob bo'lib qolmasin
     if flow and text and not text.startswith("/"):
         if flow["step"] == "calc_area":
             area = is_number(text)
@@ -2001,8 +2084,9 @@ def handle_callback(cb):
     elif data == "menu:contact":
         reply(chat_id, contact_text(), reply_markup=address_keyboard())
     elif data == "menu:address":
-        reply(chat_id, address_text(), reply_markup=address_keyboard())
-        log_action("ofis", "manzil ma'lumoti yuborildi", f"mijoz {chat_id}", chat_id, emoji="📍")
+        send_address(chat_id)                      # FAQAT manzil — anketa ishga tushmaydi
+    elif data in ("menu:dalolatnoma", "menu:act"):
+        send_dalolatnoma(chat_id)
     elif data == "menu:portfolio":
         send_portfolio(chat_id)
     elif data == "menu:faq":
@@ -2192,8 +2276,11 @@ def handle_chat_member(upd):
             f"Kanalimizga qo'shilganingiz uchun rahmat.\n"
             f"🏢 ABK MEBEL — BAZIS loyiha (m² uchun {bot_cfg()['price_per_sqm']}$) va "
             f"FastReport shablonlari.\n")
-    if a.get("plus_code"):
-        text += f"📍 Manzil: {a.get('text') or a['plus_code']}\n🕘 {hours_text()}\n"
+    if a.get("text") or a.get("plus_code"):
+        manzil = a.get("text") or ""
+        if a.get("plus_code"):
+            manzil = (manzil + f" ({a['plus_code']})").strip()
+        text += f"📍 Manzil: {manzil}\n🕘 {hours_text()}\n"
     text += "\nSavollaringiz bo'lsa shu botga yozing — javob beraman 😊"
     r = reply(user["id"], text, reply_markup=menu_keyboard())
     if not r.get("ok"):
